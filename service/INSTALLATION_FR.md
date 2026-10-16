@@ -191,6 +191,34 @@ Pour révoquer les accès validateurs, générer une nouvelle clé, remplacer `A
 puis exécuter `DELETE FROM sessions; DELETE FROM device_sessions; DELETE FROM devices; DELETE FROM pairings;` dans la console D1. Renouveler `GITHUB_TOKEN` avant
 son expiration. Ne jamais inclure de secrets dans les journaux transmis pour diagnostic.
 
+## Diagnostic d'une erreur lors de la publication
+
+La révision `publication-diagnostics-1` conserve le schéma D1, les secrets et les appareils
+appairés. Remplacer uniquement `dist/worker.js` dans Cloudflare et redéployer. `/health`
+affiche maintenant `"revision":"publication-diagnostics-1"`.
+
+Une erreur indique une étape et une référence, par exemple :
+`Publication/service failure: NETWORK_ERROR [github_ref_read; ref 1234abcd]`.
+Les journaux Cloudflare contiennent seulement la référence, l'étape et une catégorie ;
+ils ne journalisent ni clé, ni jeton, ni en-tête Authorization, ni contenu du profil.
+
+- `d1_publication_claim` : réservation de la proposition dans D1.
+- `publication_validate` : vérification du profil conservé dans la file.
+- `github_ref_read`, `github_commit_read`, `github_catalog_read` : lectures GitHub.
+- `catalog_decode` : lecture du catalogue JSON téléchargé.
+- `github_tree_create`, `github_commit_create`, `github_ref_update` : publication GitHub.
+- `d1_publication_finalize` : enregistrement de la réussite dans D1.
+
+`D1_MISSING_COLUMN` ou `D1_MISSING_TABLE` demande une vérification du schéma.
+`GitHub publication failed (HTTP 401/403)` demande une vérification du jeton et des permissions.
+`NETWORK_ERROR` et `UPSTREAM_TIMEOUT` signalent un problème de connexion à l'étape indiquée.
+Un arrêt imposé par la limite CPU de Cloudflare ne peut pas être intercepté par le code :
+consulter alors le champ Outcome et les erreurs de la requête dans Observability.
+
+Une proposition `pending` est conservée pour réessayer. Un état `publishing` peut rester
+jusqu'à l'expiration du verrou de cinq minutes après une interruption brutale. Ne pas
+renvoyer un nouveau profil pour contourner une erreur d'acceptation.
+
 ## Développement
 
 Node.js 24 : `npm ci`, `npm test`, `npm run build` dans `service/`. Les tests utilisent une

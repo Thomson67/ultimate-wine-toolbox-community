@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import worker, {sha256,validateSubmission,publish,cleanup} from '../src/worker.js';
+import worker, {sha256,validateSubmission,publish,cleanup,github} from '../src/worker.js';
 
 async function setup() {
  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
@@ -189,4 +189,28 @@ test('pairing page browser handlers sign in, inspect, approve, and revoke withou
  const row=node('devices').children[0];assert.ok(row);const revoke=row.children[1];revoke.events.click();await new Promise(setImmediate);
  assert.ok(requests.some(r=>r.path==='/v1/devices/revoke'));assert.equal(node('devices').textContent,'Aucun appareil mémorisé.');
  assert.ok(requests.every(r=>!r.path.includes('12'.repeat(32))));assert.equal(replies.length,0);
+});
+test('GitHub requests use trimmed token, JSON headers and a portable timeout signal',async()=>{
+ const saved=globalThis.fetch;globalThis.fetch=async(_url,options)=>{
+  assert.equal(options.headers.Authorization,'Bearer mock-token');assert.equal(options.headers['Content-Type'],'application/json');assert.ok(options.signal instanceof AbortSignal);return Response.json({ok:true});
+ };
+ try {assert.equal((await github({GITHUB_TOKEN:'  mock-token\n'},'git/trees','POST',{tree:[]})).ok,true);}finally{globalThis.fetch=saved}
+});
+test('publication exceptions include a safe stage and correlation id but never credentials',async()=>{
+ const {env,key,sql}=await setup(),p=await payload();await call(env,'/v1/submissions',{method:'POST',data:p});const token=await login(env,key);
+ const savedFetch=globalThis.fetch,savedLog=console.error,logs=[];const secret='never-publish-this-token';
+ globalThis.fetch=async()=>{throw new TypeError('fetch failed '+secret)};console.error=value=>logs.push(value);
+ try {
+  const r=await call(env,'/v1/submissions/'+p.metadata.id+'/approve',{method:'POST',data:{},token});
+  assert.equal(r.status,503);assert.equal(r.body.stage,'github_ref_read');assert.equal(r.body.code,'NETWORK_ERROR');assert.match(r.body.ref,/^[a-f0-9]{8}$/);
+  assert.ok(!JSON.stringify(r).includes(secret));assert.ok(!JSON.stringify(logs).includes(secret));assert.equal(JSON.parse(logs[0]).ref,r.body.ref);
+ }finally{globalThis.fetch=savedFetch;console.error=savedLog}
+ assert.equal(sql.prepare('SELECT status FROM submissions').get().status,'pending');
+});
+test('missing publication column is identified before claiming a submission',async()=>{
+ const {env,key,sql}=await setup(),p=await payload();await call(env,'/v1/submissions',{method:'POST',data:p});const token=await login(env,key);
+ sql.exec('ALTER TABLE submissions DROP COLUMN lease');const saved=console.error;console.error=()=>{};
+ try{
+  const r=await call(env,'/v1/submissions/'+p.metadata.id+'/approve',{method:'POST',data:{},token});assert.equal(r.status,503);assert.equal(r.body.stage,'d1_publication_claim');assert.equal(r.body.code,'D1_MISSING_COLUMN');
+ }finally{console.error=saved}
 });

@@ -9,6 +9,28 @@ const MODES = new Set(['keyboard','mousebutton','mousemovement','pause','hold','
 const enc = new TextEncoder();
 const now = () => Math.floor(Date.now()/1000);
 class Failure extends Error { constructor(status, message) { super(message); this.status=status; } }
+function reason(error) {
+  const message=String(error?.message||'');
+  if(/no such table:/i.test(message)) return 'D1_MISSING_TABLE';
+  if(/no such column:|has no column named/i.test(message)) return 'D1_MISSING_COLUMN';
+  if(/D1_ERROR|SQLITE_/i.test(message)) return 'D1_QUERY_ERROR';
+  if(/header/i.test(message)) return 'INVALID_HTTP_HEADER';
+  if(/timeout|timed out|abort/i.test(message)) return 'UPSTREAM_TIMEOUT';
+  if(/network|fetch failed|connection|dns/i.test(message)) return 'NETWORK_ERROR';
+  return ['TypeError','SyntaxError','RangeError'].includes(error?.name)?error.name:'INTERNAL_ERROR';
+}
+function classified(error, stage) {
+  if(error instanceof Failure && error.stage) return error;
+  const failure=new Failure(Number.isInteger(error?.status)&&error.status>=400&&error.status<=599?error.status:503,
+    error instanceof Failure?error.message:`Publication/service failure: ${reason(error)}`);
+  failure.stage=stage; failure.code=error instanceof Failure?'REQUEST_FAILED':reason(error);
+  failure.ref=crypto.randomUUID().slice(0,8);
+  failure.message=`${failure.message} [${stage}; ref ${failure.ref}]`;
+  return failure;
+}
+async function stage(name, action) {
+  try {return await action();} catch(error) {throw classified(error,name);}
+}
 function requireValue(ok, message, status=400) { if (!ok) throw new Failure(status, message); }
 export async function sha256(text) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(text)))].map(v=>v.toString(16).padStart(2,'0')).join('');
@@ -103,21 +125,26 @@ async function authorized(request,env) {
   return token;
 }
 export async function github(env, path, method='GET', data) {
-  const r=await fetch(`https://api.github.com/repos/${REPO}/${path}`,{
-    method, redirect:'error', signal:AbortSignal.timeout(15000),
-    headers:{Authorization:`Bearer ${env.GITHUB_TOKEN}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'UWT-community'},
-    ...(data===undefined?{}:{body:JSON.stringify(data)})});
-  if(!r.ok) throw new Failure(r.status===409||r.status===422?409:502,'GitHub publication failed ('+r.status+'); retry approval');
-  return r.json();
+  const token=String(env.GITHUB_TOKEN||'').trim();
+  requireValue(token && /^[\x21-\x7e]+$/.test(token),'GITHUB_TOKEN is missing or contains invalid characters; check the Cloudflare secret',503);
+  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),15000);
+  try {
+    const r=await fetch(`https://api.github.com/repos/${REPO}/${path}`,{
+      method, redirect:'error', signal:controller.signal,
+      headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'UWT-community'},
+      ...(data===undefined?{}:{body:JSON.stringify(data)})});
+    if(!r.ok) throw new Failure(r.status===409||r.status===422?409:502,'GitHub publication failed (HTTP '+r.status+'); check token permissions or retry approval');
+    try {return await r.json();} catch {throw new Failure(502,'GitHub returned invalid JSON');}
+  } finally {clearTimeout(timer);}
 }
 // Profile and catalogue enter the same commit. Never force-update a Git ref.
 export async function publish(env, submission, api=github) {
   for(let attempt=0;attempt<3;attempt++) {
-    const ref=await api(env,'git/ref/heads/main');
-    const head=await api(env,'git/commits/'+ref.object.sha);
-    const file=await api(env,`contents/catalog.json?ref=${head.sha}`);
+    const ref=await stage('github_ref_read',()=>api(env,'git/ref/heads/main'));
+    const head=await stage('github_commit_read',()=>api(env,'git/commits/'+ref.object.sha));
+    const file=await stage('github_catalog_read',()=>api(env,`contents/catalog.json?ref=${head.sha}`));
     requireValue(file.encoding==='base64' && file.size<=1024*1024, 'Catalogue too large',409);
-    const current=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(file.content.replace(/\s/g,'')),c=>c.charCodeAt(0))));
+    const current=await stage('catalog_decode',async()=>JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(file.content.replace(/\s/g,'')),c=>c.charCodeAt(0)))));
     requireValue(current.schema===1 && Array.isArray(current.entries) && current.entries.length<3000,'Invalid or full catalogue',409);
     const m=JSON.parse(submission.metadata);
     const existing=current.entries.find(v=>v.id===m.id);
@@ -128,17 +155,17 @@ export async function publish(env, submission, api=github) {
     current.entries.push(m);
     const catalogText=JSON.stringify(current,null,2)+'\n';
     requireValue(enc.encode(catalogText).length<=1024*1024,'Catalogue full',409);
-    const tree=await api(env,'git/trees','POST',{base_tree:head.tree.sha,tree:[
+    const tree=await stage('github_tree_create',()=>api(env,'git/trees','POST',{base_tree:head.tree.sha,tree:[
       {path:m.file,mode:'100644',type:'blob',content:submission.profile},
-      {path:'catalog.json',mode:'100644',type:'blob',content:catalogText}]});
-    const commit=await api(env,'git/commits','POST',{message:`Approve community contribution ${m.id}`,tree:tree.sha,parents:[head.sha]});
-    try {await api(env,'git/refs/heads/main','PATCH',{sha:commit.sha,force:false}); return commit.sha;}
+      {path:'catalog.json',mode:'100644',type:'blob',content:catalogText}]}));
+    const commit=await stage('github_commit_create',()=>api(env,'git/commits','POST',{message:`Approve community contribution ${m.id}`,tree:tree.sha,parents:[head.sha]}));
+    try {await stage('github_ref_update',()=>api(env,'git/refs/heads/main','PATCH',{sha:commit.sha,force:false})); return commit.sha;}
     catch(error) {if(error.status!==409||attempt===2) throw error;}
   }
 }
 async function route(request,env) {
   const url=new URL(request.url), path=url.pathname;
-  if(request.method==='GET' && (path==='/'||path==='/health')) return response({service:'uwt-community',version:2,configured:!!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||'')),profile_limit:PROFILE_LIMIT});
+  if(request.method==='GET' && (path==='/'||path==='/health')) return response({service:'uwt-community',version:2,revision:'publication-diagnostics-1',configured:!!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||'')),profile_limit:PROFILE_LIMIT});
   requireValue(env.DB && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||''),'Service is not configured',503);
   if(request.method==='GET' && path==='/pair') return pairingPage();
   const paired=await pairingRoute(request,env,{body,rate,ipKey,sha256,requireValue,response,authorized,text});
@@ -190,16 +217,18 @@ async function route(request,env) {
   if(row.status==='approved') return response({status:'approved',commit:row.commit_sha});
   requireValue(env.GITHUB_TOKEN,'GitHub secret is missing',503);
   const lease=crypto.randomUUID();
-  const claimed=await env.DB.prepare("UPDATE submissions SET status='publishing',lease=?,lease_until=? WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))")
-    .bind(lease,now()+300,row.id,now()).run();
+  const claimed=await stage('d1_publication_claim',()=>env.DB.prepare("UPDATE submissions SET status='publishing',lease=?,lease_until=? WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))")
+    .bind(lease,now()+300,row.id,now()).run());
   requireValue(claimed.meta.changes===1,'Contribution already processed or being published; retry later',409);
   try {
-    await validateSubmission({metadata:JSON.parse(row.metadata),profile:row.profile});
-    const commit=await publish(env,row);
-    await env.DB.prepare("UPDATE submissions SET status='approved',profile='',commit_sha=?,lease=NULL,lease_until=0 WHERE id=? AND lease=?").bind(commit,row.id,lease).run();
+    await stage('publication_validate',()=>validateSubmission({metadata:JSON.parse(row.metadata),profile:row.profile}));
+    const commit=await stage('publication',()=>publish(env,row));
+    await stage('d1_publication_finalize',()=>env.DB.prepare("UPDATE submissions SET status='approved',profile='',commit_sha=?,lease=NULL,lease_until=0 WHERE id=? AND lease=?").bind(commit,row.id,lease).run());
     return response({status:'approved',commit});
   } catch(error) {
-    await env.DB.prepare("UPDATE submissions SET status='pending',lease=NULL,lease_until=0 WHERE id=? AND lease=?").bind(row.id,lease).run(); throw error;
+    try {await env.DB.prepare("UPDATE submissions SET status='pending',lease=NULL,lease_until=0 WHERE id=? AND lease=?").bind(row.id,lease).run();}
+    catch {error=classified(error,'publication'); error.message+=' (lease release failed; retry after five minutes)';}
+    throw error;
   }
 }
 export async function cleanup(env) {
@@ -214,6 +243,12 @@ export async function cleanup(env) {
   ]);
 }
 export default {
-  async fetch(request,env) {try {return await route(request,env);} catch(error) {return response({error:error instanceof Failure?error.message:'Service unavailable; retry later'},error.status||503);}},
+  async fetch(request,env) {
+    try {return await route(request,env);} catch(error) {
+      const failure=classified(error,'request');
+      if(failure.status>=500) console.error(JSON.stringify({event:'uwt_service_error',ref:failure.ref,stage:failure.stage,code:failure.code}));
+      return response({error:failure.message,code:failure.code,stage:failure.stage,ref:failure.ref},failure.status);
+    }
+  },
   async scheduled(_event,env) {await cleanup(env);}
 };
