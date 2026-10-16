@@ -182,7 +182,7 @@ le véritable environnement Cloudflare. Les tests locaux ne garantissent pas cet
 - **HTTP 429** : trop de tentatives ; attendre la fin de la période de limitation.
 - **GitHub publication failed (403)** : permissions ou expiration du jeton, ou règle de branche.
 - **HTTP 409 lors d'une validation** : une publication peut être en cours ; attendre puis rouvrir.
-- **Envoi non confirmé** : conserver le ZIP et utiliser « Renvoyer un paquet conservé ».
+- **Envoi non confirmé** : utiliser « Réessayer le même envoi maintenant ? ». Le fichier ZIP de secours reste conservé localement ; aucun renvoi automatique n’est effectué au démarrage.
   Le même paquet garde son identifiant ; une réponse perdue ne crée pas de doublon.
 - **Erreur CPU Cloudflare** : relever l'erreur et l'opération ; ne pas passer au payant automatiquement.
 - Les réglages clavier ne sont pas exécutés pendant la revue ; l'inspection ne lance pas AntiMicroX.
