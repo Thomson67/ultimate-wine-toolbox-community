@@ -76,6 +76,20 @@
       "requirements": [],
       "file": "reshade/assassins-creed-1-b9e57168.ini",
       "sha256": "9770113e2b55f9f03bcc0035bd7285e6a585f2016b281c37891e754b55c5d8c7"
+    },
+    {
+      "id": "oddworld-stranger-s-wrath-hd-614c393f",
+      "kind": "antimicrox",
+      "game": "Oddworld: Stranger's Wrath HD",
+      "title": "Oddworld: Stranger's Wrath HD",
+      "author": "Thomson",
+      "description": "Prise en charge manette complète",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "antimicrox/oddworld-stranger-s-wrath-hd-614c393f.amgp",
+      "sha256": "4d412ea1187fe64f2923b6ee3f88271b35e58b9cf9ee8eb1a8a300b5b991dc07"
     }
   ]
 }
