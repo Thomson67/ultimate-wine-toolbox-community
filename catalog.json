@@ -48,6 +48,20 @@
       "requirements": [],
       "file": "antimicrox/max-payne-acc0b342.amgp",
       "sha256": "e5d3aca8d299c1b270980a00f25da138742fe071e6d42d355f6c6f7a28d93176"
+    },
+    {
+      "id": "lighthouse-97d77987",
+      "kind": "reshade",
+      "game": "Lighthouse",
+      "title": "Lighthouse",
+      "author": "Thomson",
+      "description": "",
+      "notes": "Test",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "reshade/lighthouse-97d77987.ini",
+      "sha256": "9a272cd9e17f0ab738a7148faa3e7eb4fa82deeea6864182909607cb26020936"
     }
   ]
 }
