@@ -191,11 +191,21 @@ Pour révoquer les accès validateurs, générer une nouvelle clé, remplacer `A
 puis exécuter `DELETE FROM sessions; DELETE FROM device_sessions; DELETE FROM devices; DELETE FROM pairings;` dans la console D1. Renouveler `GITHUB_TOKEN` avant
 son expiration. Ne jamais inclure de secrets dans les journaux transmis pour diagnostic.
 
+## Correctif Cloudflare : `TypeError` à `github_ref_read`
+
+Le runtime workerd rejette `redirect: "error"` avant même d'envoyer la requête GitHub.
+La révision `github-manual-redirect-1` utilise `redirect: "manual"` et refuse explicitement
+les réponses HTTP 3xx. Aucun jeton n'est transféré vers une cible de redirection.
+
+Remplacer uniquement `dist/worker.js` dans Cloudflare, puis déployer. Aucun changement
+D1, de clé, d'appairage ou de Toolbox n'est nécessaire. `/health` affiche la nouvelle
+révision. Réessayer l'acceptation de la proposition existante.
+
 ## Diagnostic d'une erreur lors de la publication
 
-La révision `publication-diagnostics-1` conserve le schéma D1, les secrets et les appareils
+La révision de diagnostic et ses correctifs suivants conservent le schéma D1, les secrets et les appareils
 appairés. Remplacer uniquement `dist/worker.js` dans Cloudflare et redéployer. `/health`
-affiche maintenant `"revision":"publication-diagnostics-1"`.
+affiche maintenant `"revision":"github-manual-redirect-1"`.
 
 Une erreur indique une étape et une référence, par exemple :
 `Publication/service failure: NETWORK_ERROR [github_ref_read; ref 1234abcd]`.

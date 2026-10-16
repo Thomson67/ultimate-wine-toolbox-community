@@ -4465,11 +4465,12 @@ async function github(env, path, method = "GET", data) {
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
       method,
-      redirect: "error",
+      redirect: "manual",
       signal: controller.signal,
       headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "UWT-community" },
       ...data === void 0 ? {} : { body: JSON.stringify(data) }
     });
+    requireValue(r.status < 300 || r.status >= 400, "GitHub redirect refused; check the configured repository", 502);
     if (!r.ok) throw new Failure(r.status === 409 || r.status === 422 ? 409 : 502, "GitHub publication failed (HTTP " + r.status + "); check token permissions or retry approval");
     try {
       return await r.json();
@@ -4512,7 +4513,7 @@ async function publish(env, submission, api = github) {
 }
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname;
-  if (request.method === "GET" && (path === "/" || path === "/health")) return response({ service: "uwt-community", version: 2, revision: "publication-diagnostics-1", configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
+  if (request.method === "GET" && (path === "/" || path === "/health")) return response({ service: "uwt-community", version: 2, revision: "github-manual-redirect-1", configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
   requireValue(env.DB && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || ""), "Service is not configured", 503);
   if (request.method === "GET" && path === "/pair") return pairingPage();
   const paired = await pairingRoute(request, env, { body, rate, ipKey, sha256, requireValue, response, authorized, text });

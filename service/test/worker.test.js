@@ -192,7 +192,7 @@ test('pairing page browser handlers sign in, inspect, approve, and revoke withou
 });
 test('GitHub requests use trimmed token, JSON headers and a portable timeout signal',async()=>{
  const saved=globalThis.fetch;globalThis.fetch=async(_url,options)=>{
-  assert.equal(options.headers.Authorization,'Bearer mock-token');assert.equal(options.headers['Content-Type'],'application/json');assert.ok(options.signal instanceof AbortSignal);return Response.json({ok:true});
+  assert.equal(options.redirect,'manual');assert.equal(options.headers.Authorization,'Bearer mock-token');assert.equal(options.headers['Content-Type'],'application/json');assert.ok(options.signal instanceof AbortSignal);return Response.json({ok:true});
  };
  try {assert.equal((await github({GITHUB_TOKEN:'  mock-token\n'},'git/trees','POST',{tree:[]})).ok,true);}finally{globalThis.fetch=saved}
 });
@@ -213,4 +213,15 @@ test('missing publication column is identified before claiming a submission',asy
  try{
   const r=await call(env,'/v1/submissions/'+p.metadata.id+'/approve',{method:'POST',data:{},token});assert.equal(r.status,503);assert.equal(r.body.stage,'d1_publication_claim');assert.equal(r.body.code,'D1_MISSING_COLUMN');
  }finally{console.error=saved}
+});
+test('GitHub redirects are rejected without forwarding credentials to a second destination',async()=>{
+ const saved=globalThis.fetch;const calls=[];
+ globalThis.fetch=async(url,options)=>{
+  calls.push({url,options});
+  // Mirrors workerd's request-constructor restriction, absent from Node's Fetch API.
+  if(!['follow','manual'].includes(options.redirect))throw new TypeError('Invalid redirect value');
+  return new Response(null,{status:302,headers:{Location:'https://different.example/collect'}});
+ };
+ try{await assert.rejects(github({GITHUB_TOKEN:'mock-token'},'git/ref/heads/main'),/redirect refused/);assert.equal(calls.length,1);assert.ok(calls[0].url.startsWith('https://api.github.com/'));}
+ finally{globalThis.fetch=saved}
 });
