@@ -28,6 +28,20 @@
       "requirements": [],
       "file": "antimicrox/oddworld-stranger-s-wrath-hd-614c393f.amgp",
       "sha256": "4d412ea1187fe64f2923b6ee3f88271b35e58b9cf9ee8eb1a8a300b5b991dc07"
+    },
+    {
+      "id": "reblue-bd7d41d0",
+      "kind": "reshade",
+      "game": "reblue",
+      "title": "reblue",
+      "author": "Thomson",
+      "description": "Preset pour la decomp \"reblue\" de Blue Dragon",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "reshade/reblue-bd7d41d0.ini",
+      "sha256": "bca9454c7c5570a6754964990c97450d205f6e092c161f35ef31b21513146d81"
     }
   ]
 }
