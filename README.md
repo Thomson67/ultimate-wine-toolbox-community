@@ -9,8 +9,6 @@ Les deux outils gardent leurs propres menus. Le téléchargement ne nécessite a
 - `service/` : service Cloudflare Workers + D1 de proposition et validation.
 - [Installation pas à pas du service](service/INSTALLATION_FR.md).
 
-Les deux profils initiaux sont des exemples issus des fixtures Pad2Key déjà publiques
-(Max Payne et Gobliins 6). Ils ne représentent pas les profils personnels modifiés depuis.
 
 ## Proposer et valider
 
@@ -24,6 +22,9 @@ affiché sur Batocera. Une session dure 30 minutes ; la mémorisation de l'appar
 30 jours est facultative et révocable depuis cette page. Ils peuvent
 lire les mappages ou le preset, puis accepter ou refuser depuis le menu de chaque outil.
 Une acceptation ajoute le profil et le catalogue dans un même commit GitHub.
+Le menu de validation permet aussi de retirer un profil déjà publié : le fichier et
+son entrée du catalogue sont retirés ensemble. Supprimer seulement le fichier sur
+GitHub ne suffit pas à le retirer de la liste.
 
 Partagez uniquement des réglages que vous êtes autorisé à publier. Ne soumettez pas de
 jeux, exécutables, shaders, textures ou données personnelles. Les actions AntiMicroX

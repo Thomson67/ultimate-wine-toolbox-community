@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import worker, {sha256,validateSubmission,publish,cleanup,github} from '../src/worker.js';
+import worker, {sha256,validateSubmission,publish,cleanup,github,removePublished,publishedMetadata} from '../src/worker.js';
 
 async function setup() {
  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
@@ -224,4 +224,90 @@ test('GitHub redirects are rejected without forwarding credentials to a second d
  };
  try{await assert.rejects(github({GITHUB_TOKEN:'mock-token'},'git/ref/heads/main'),/redirect refused/);assert.equal(calls.length,1);assert.ok(calls[0].url.startsWith('https://api.github.com/'));}
  finally{globalThis.fetch=saved}
+});
+
+function removalMock(initial,{missing=false,conflict=false,afterConflict=null,changedFile=false}={}) {
+ const calls=[];let entries=initial.map(p=>p.metadata),patches=0,version=0;
+ const api=async(_env,path,method='GET',data)=>{
+  calls.push({path,method,data});
+  if(path==='git/ref/heads/main')return {object:{sha:'head'+version}};
+  if(path.startsWith('git/commits/head'))return {sha:'head'+version,tree:{sha:'base'+version}};
+  if(path.startsWith('contents/catalog.json'))return {encoding:'base64',size:500,content:Buffer.from(JSON.stringify({schema:1,entries})).toString('base64')};
+  if(path.startsWith('contents/')) {
+   if(missing){const e=new Error('missing');e.upstreamStatus=404;throw e;}
+   const file=path.slice(9).split('?')[0],item=initial.find(p=>p.metadata.file===file);
+   return {type:'file',path:file,sha:changedFile?'f'.repeat(40):item.metadata.sha256.slice(0,40),encoding:'base64',size:item.profile.length,content:Buffer.from(changedFile?'edited':item.profile).toString('base64')};
+  }
+  if(path==='git/trees')return {sha:'newtree'};
+  if(path==='git/commits')return {sha:'removed'+version};
+  if(path==='git/refs/heads/main'){
+   if(conflict && ++patches===1){entries=afterConflict;version++;const e=new Error('race');e.status=409;throw e;}
+   const tree=calls.filter(c=>c.path==='git/trees').at(-1).data.tree;
+   entries=JSON.parse(tree.find(v=>v.path==='catalog.json').content).entries;version++;return {};
+  }
+  throw Error(path);
+ };return {calls,api};
+}
+async function removalToken(p,missing=false){return sha256(JSON.stringify(publishedMetadata(p.metadata))+'\0'+(missing?'missing':p.metadata.sha256.slice(0,40)))}
+test('published removal deletes profile and manifest entry in one non-forced commit',async()=>{
+ const p=await payload(),other=await payload('reshade','another-12345678'),m=removalMock([p,other]);
+ assert.equal(await removePublished({},'antimicrox',p.metadata.id,await removalToken(p),m.api),'removed0');
+ const tree=m.calls.find(v=>v.path==='git/trees').data;
+ assert.equal(tree.base_tree,'base0');assert.deepEqual(tree.tree.find(v=>v.path===p.metadata.file),{path:p.metadata.file,mode:'100644',type:'blob',sha:null});
+ assert.deepEqual(JSON.parse(tree.tree.find(v=>v.path==='catalog.json').content).entries,[other.metadata]);
+ assert.equal(m.calls.at(-1).data.force,false);
+ const writes=m.calls.filter(v=>v.method!=='GET').length;
+ assert.equal(await removePublished({},'antimicrox',p.metadata.id,await removalToken(p),m.api),'head1');
+ assert.equal(m.calls.filter(v=>v.method!=='GET').length,writes);
+});
+test('published removal repairs an entry whose file was manually deleted',async()=>{
+ const p=await payload(),m=removalMock([p],{missing:true});await removePublished({},'antimicrox',p.metadata.id,await removalToken(p,true),m.api);
+ const tree=m.calls.find(v=>v.path==='git/trees').data.tree;
+ assert.equal(tree.length,1);assert.deepEqual(JSON.parse(tree[0].content).entries,[]);
+});
+test('removal refuses stale review, wrong kind, changed bytes, and forged catalogue paths',async()=>{
+ const p=await payload();
+ for(const scenario of ['stale','kind','bytes','path']){
+  const copy=structuredClone(p);if(scenario==='path')copy.metadata.file='service/src/worker.js';
+  const m=removalMock([copy],{changedFile:scenario==='bytes'});
+  await assert.rejects(removePublished({},scenario==='kind'?'reshade':'antimicrox',p.metadata.id,scenario==='stale'?'0'.repeat(64):await removalToken(p),m.api));
+  assert.equal(m.calls.filter(v=>v.method!=='GET').length,0);
+ }
+});
+test('removal retries races while preserving unrelated additions and stops if target changed',async()=>{
+ const p=await payload(),other=await payload('reshade','another-12345678');
+ const m=removalMock([p],{conflict:true,afterConflict:[p.metadata,other.metadata]});
+ await removePublished({},'antimicrox',p.metadata.id,await removalToken(p),m.api);
+ const trees=m.calls.filter(v=>v.path==='git/trees');assert.equal(trees.length,2);
+ assert.deepEqual(JSON.parse(trees[1].data.tree[0].content).entries,[other.metadata]);
+ assert.ok(m.calls.filter(v=>v.method==='PATCH').every(v=>v.data.force===false));
+ const edited={...p.metadata,title:'Edited while reviewing'};
+ const changed=removalMock([p],{conflict:true,afterConflict:[edited]});
+ await assert.rejects(removePublished({},'antimicrox',p.metadata.id,await removalToken(p),changed.api));
+ assert.equal(changed.calls.filter(v=>v.path==='git/trees').length,1);
+});
+test('published moderation requires authentication and handles real GitHub 404 plus real SQLite',async()=>{
+ const {env,key,sql}=await setup(),p=await payload(),other=await payload('reshade','another-12345678');
+ await call(env,'/v1/submissions',{method:'POST',data:p});sql.prepare("UPDATE submissions SET status='approved'").run();
+ for(const path of ['/v1/published?kind=antimicrox','/v1/published/antimicrox/'+p.metadata.id,'/v1/published/antimicrox/'+p.metadata.id+'/remove'])
+  assert.equal((await call(env,path,{method:path.endsWith('/remove')?'POST':'GET',data:path.endsWith('/remove')?{}:undefined})).status,401);
+ const token=await login(env,key),saved=globalThis.fetch,m=removalMock([p,other],{missing:true});
+ globalThis.fetch=async(url,options)=>{
+  assert.ok(String(url).startsWith('https://api.github.com/repos/Thomson67/ultimate-wine-toolbox-community/'));
+  assert.equal(options.redirect,'manual');
+  const path=String(url).split('/ultimate-wine-toolbox-community/')[1];
+  try{return Response.json(await m.api(env,path,options.method,options.body?JSON.parse(options.body):undefined));}
+  catch(error){if(error.upstreamStatus===404)return Response.json({message:'Not Found'},{status:404});throw error;}
+ };
+ try{
+  const list=await call(env,'/v1/published?kind=antimicrox',{token});assert.equal(list.body.entries.length,1);assert.equal(list.body.entries[0].kind,'antimicrox');
+  const path='/v1/published/antimicrox/'+p.metadata.id;
+  assert.equal((await call(env,path+'/remove',{method:'POST',token,data:{}})).status,400);
+  const reviewed=await call(env,path,{token});assert.equal(reviewed.body.metadata.id,p.metadata.id);assert.match(reviewed.body.review_hash,/^[a-f0-9]{64}$/);
+  assert.equal((await call(env,path+'/remove',{method:'POST',token,data:{expected_hash:'0'.repeat(64)}})).status,409);
+  const removed=await call(env,path+'/remove',{method:'POST',token,data:{expected_hash:reviewed.body.review_hash}});
+  assert.equal(removed.status,200);assert.equal(removed.body.status,'removed');
+  assert.equal(sql.prepare('SELECT status FROM submissions WHERE id=?').get(p.metadata.id).status,'rejected');
+  assert.equal((await call(env,path+'/remove',{method:'POST',token,data:{expected_hash:reviewed.body.review_hash}})).body.status,'removed');
+ }finally{globalThis.fetch=saved;}
 });

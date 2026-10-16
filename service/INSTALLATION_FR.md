@@ -246,3 +246,26 @@ Worker et son bundle n’ont pas besoin d’être redéployés pour ce seul chan
 La base D1, les secrets Cloudflare et la clé validateur sont conservés. La Toolbox
 lie ses autorisations mémorisées à l’origine HTTPS : refaire l’appairage sur la
 nouvelle adresse. Le catalogue et les profils sur GitHub restent inchangés.
+
+## Retirer un profil ou preset déjà publié
+
+Mettre à jour le Worker avec le fichier `service/dist/worker.js` de cette révision,
+puis cliquer **Deploy**. Aucun changement D1, secret ou clé validateur nécessaire.
+Sur `/health`, vérifier `"revision":"published-removal-1"` et la capacité
+`"published-removal"` (la version reste 2).
+
+Dans la Toolbox mise à jour : **AntiMicroX ou ReShade → Télécharger/partager →
+Valider les partages (modérateurs) → Retirer un partage déjà publié**. Choisir le
+profil, vérifier sa fiche et confirmer. La confirmation est sur Non par défaut.
+Le fichier et son entrée dans `catalog.json` sont retirés dans le même commit
+GitHub, sans forcer la branche. Un profil modifié pendant la confirmation doit
+être consulté à nouveau. Les autres publications simultanées sont conservées.
+
+La liste de modération provient du catalogue GitHub actuel, même pour les profils
+anciens sans ligne D1. Si un fichier a déjà été supprimé manuellement sur GitHub,
+cette action peut encore retirer sa fiche restée dans le catalogue. Supprimer
+uniquement le fichier ne suffit pas à retirer une ligne de la Toolbox.
+
+Les copies déjà installées chez les joueurs restent conservées. Après le retrait,
+la Toolbox actualise sa liste ; les autres utilisateurs doivent actualiser la leur.
+La suppression concerne l’état courant du dépôt : l’historique Git n’est pas réécrit.

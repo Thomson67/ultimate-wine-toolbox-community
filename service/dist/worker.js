@@ -4471,7 +4471,11 @@ async function github(env, path, method = "GET", data) {
       ...data === void 0 ? {} : { body: JSON.stringify(data) }
     });
     requireValue(r.status < 300 || r.status >= 400, "GitHub redirect refused; check the configured repository", 502);
-    if (!r.ok) throw new Failure(r.status === 409 || r.status === 422 ? 409 : 502, "GitHub publication failed (HTTP " + r.status + "); check token permissions or retry approval");
+    if (!r.ok) {
+      const error = new Failure(r.status === 409 || r.status === 422 ? 409 : 502, "GitHub publication failed (HTTP " + r.status + "); check token permissions or retry approval");
+      error.upstreamStatus = r.status;
+      throw error;
+    }
     try {
       return await r.json();
     } catch {
@@ -4511,9 +4515,73 @@ async function publish(env, submission, api = github) {
     }
   }
 }
+function publishedMetadata(m) {
+  requireValue(m && ["antimicrox", "reshade"].includes(m.kind), "Invalid profile type");
+  requireValue(typeof m.id === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(m.id), "Invalid identifier");
+  const result = { id: m.id, kind: m.kind };
+  for (const name of ["game", "title", "author"]) {
+    result[name] = text(m[name], 160);
+    requireValue(result[name], "Missing " + name);
+  }
+  for (const name of ["description", "notes", "tested_on", "hotkey"]) result[name] = text(m[name] ?? "");
+  requireValue(Array.isArray(m.requirements) && m.requirements.length <= 60, "Invalid requirements");
+  result.requirements = m.requirements.map((value) => text(value, 160));
+  result.file = `${m.kind}/${m.id}.${m.kind === "antimicrox" ? "amgp" : "ini"}`;
+  requireValue(m.file === result.file && /^[a-f0-9]{64}$/.test(m.sha256 || ""), "Invalid catalogue destination or checksum");
+  result.sha256 = m.sha256;
+  return result;
+}
+async function publishedCatalog(env, api = github) {
+  const ref = await stage("github_ref_read", () => api(env, "git/ref/heads/main"));
+  const head = await stage("github_commit_read", () => api(env, "git/commits/" + ref.object.sha));
+  const file = await stage("github_catalog_read", () => api(env, `contents/catalog.json?ref=${head.sha}`));
+  requireValue(file.encoding === "base64" && file.size <= 1024 * 1024, "Invalid or oversized catalogue", 409);
+  const catalog = await stage("catalog_decode", async () => JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(file.content.replace(/\s/g, "")), (c) => c.charCodeAt(0)))));
+  requireValue(catalog.schema === 1 && Array.isArray(catalog.entries) && catalog.entries.length <= 3e3, "Invalid catalogue", 409);
+  const entries = catalog.entries.map(publishedMetadata);
+  requireValue(new Set(entries.map((v) => v.id)).size === entries.length, "Duplicate catalogue identifier", 409);
+  return { head, catalog, entries };
+}
+async function publishedFileState(env, item, head, api = github) {
+  return stage("github_published_file_read", async () => {
+    try {
+      const value = await api(env, `contents/${item.file}?ref=${head.sha}`);
+      requireValue(value.type === "file" && value.path === item.file && typeof value.sha === "string" && /^[a-f0-9]{40}$/.test(value.sha), "Unexpected published file", 409);
+      return { exists: true, sha: value.sha };
+    } catch (error) {
+      if (error.upstreamStatus === 404) return { exists: false, sha: "missing" };
+      throw error;
+    }
+  });
+}
+async function removePublished(env, kind, id, expected, api = github) {
+  requireValue(["antimicrox", "reshade"].includes(kind) && /^[a-z0-9][a-z0-9-]{0,79}$/.test(id), "Invalid published profile");
+  requireValue(typeof expected === "string" && /^[a-f0-9]{64}$/.test(expected), "Review this published profile first");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { head, catalog, entries } = await publishedCatalog(env, api);
+    const item = entries.find((v) => v.kind === kind && v.id === id);
+    if (!item) {
+      requireValue(!entries.some((v) => v.id === id), "Unexpected profile type", 409);
+      return head.sha;
+    }
+    const file = await publishedFileState(env, item, head, api);
+    requireValue(await sha256(JSON.stringify(item) + "\0" + file.sha) === expected, "Published profile changed; review it again", 409);
+    catalog.entries = catalog.entries.filter((v) => !(v.kind === kind && v.id === id));
+    const treeEntries = [{ path: "catalog.json", mode: "100644", type: "blob", content: JSON.stringify(catalog, null, 2) + "\n" }];
+    if (file.exists) treeEntries.push({ path: item.file, mode: "100644", type: "blob", sha: null });
+    const tree = await stage("github_tree_create", () => api(env, "git/trees", "POST", { base_tree: head.tree.sha, tree: treeEntries }));
+    const commit = await stage("github_commit_create", () => api(env, "git/commits", "POST", { message: `Remove community contribution ${item.id}`, tree: tree.sha, parents: [head.sha] }));
+    try {
+      await stage("github_ref_update", () => api(env, "git/refs/heads/main", "PATCH", { sha: commit.sha, force: false }));
+      return commit.sha;
+    } catch (error) {
+      if (error.status !== 409 || attempt === 2) throw error;
+    }
+  }
+}
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname;
-  if (request.method === "GET" && (path === "/" || path === "/health")) return response({ service: "uwt-community", version: 2, revision: "github-manual-redirect-1", configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
+  if (request.method === "GET" && (path === "/" || path === "/health")) return response({ service: "uwt-community", version: 2, revision: "published-removal-1", capabilities: ["published-removal"], configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
   requireValue(env.DB && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || ""), "Service is not configured", 503);
   if (request.method === "GET" && path === "/pair") return pairingPage();
   const paired = await pairingRoute(request, env, { body, rate, ipKey, sha256, requireValue, response, authorized, text });
@@ -4551,6 +4619,29 @@ async function route(request, env) {
     requireValue(["antimicrox", "reshade"].includes(kind), "Invalid profile type");
     const rows = await env.DB.prepare("SELECT metadata,status FROM submissions WHERE kind=? AND status IN ('pending','publishing') ORDER BY created LIMIT 200").bind(kind).all();
     return response({ entries: rows.results.map((r) => ({ ...JSON.parse(r.metadata), status: r.status })) });
+  }
+  if (path === "/v1/published" && request.method === "GET") {
+    const kind = url.searchParams.get("kind");
+    requireValue(["antimicrox", "reshade"].includes(kind), "Invalid profile type");
+    const { entries } = await publishedCatalog(env);
+    return response({ entries: entries.filter((v) => v.kind === kind) });
+  }
+  const published = path.match(/^\/v1\/published\/(antimicrox|reshade)\/([a-z0-9][a-z0-9-]{0,79})(\/remove)?$/);
+  if (published) {
+    const [, kind, id, action] = published;
+    if (!action && request.method === "GET") {
+      const { entries, head } = await publishedCatalog(env), metadata = entries.find((v) => v.kind === kind && v.id === id);
+      requireValue(metadata, "Unknown published profile", 404);
+      const file = await publishedFileState(env, metadata, head);
+      return response({ metadata, review_hash: await sha256(JSON.stringify(metadata) + "\0" + file.sha), file_missing: !file.exists });
+    }
+    requireValue(action && request.method === "POST", "Unsupported method", 405);
+    const value = await body(request, 1024);
+    const row2 = await env.DB.prepare("SELECT status,lease_until FROM submissions WHERE id=? AND kind=?").bind(id, kind).first();
+    requireValue(!row2 || row2.status !== "publishing" || row2.lease_until < now2(), "Contribution is being published; retry later", 409);
+    const commit = await stage("removal", () => removePublished(env, kind, id, value.expected_hash));
+    await stage("d1_removal_finalize", () => env.DB.prepare("UPDATE submissions SET status='rejected',profile='' WHERE id=? AND kind=? AND status='approved'").bind(id, kind).run());
+    return response({ status: "removed", commit });
   }
   const match = path.match(/^\/v1\/submissions\/([a-z0-9][a-z0-9-]{0,79})(?:\/(approve|reject))?$/);
   requireValue(match, "Unknown endpoint", 404);
@@ -4614,6 +4705,9 @@ export {
   worker_default as default,
   github,
   publish,
+  publishedCatalog,
+  publishedMetadata,
+  removePublished,
   sha256,
   validateSubmission
 };

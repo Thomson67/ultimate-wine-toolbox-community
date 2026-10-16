@@ -2,40 +2,6 @@
   "schema": 1,
   "entries": [
     {
-      "id": "max-payne-pad2key-example",
-      "kind": "antimicrox",
-      "game": "Max Payne",
-      "title": "Pad2Key — exemple de départ",
-      "author": "Thomson",
-      "description": "Profil de départ converti depuis le Pad2Key fourni pendant le développement.",
-      "notes": "Exemple sans les ajouts Hotkey personnalisés ultérieurs. Vérifier les réglages de souris et adapter au jeu.",
-      "tested_on": "Exemple de conversion ; les versions de jeu et runner ne sont pas spécifiées.",
-      "hotkey": "",
-      "requirements": [
-        "AntiMicroX 3.6.1, uinput",
-        "Manette SDL GameController"
-      ],
-      "file": "antimicrox/max-payne-pad2key-example.amgp",
-      "sha256": "39d4d95155b8fd281d5b3dbe372d99817f79f0342a06897e2f6697d051ad73ea"
-    },
-    {
-      "id": "gobliins-6-pad2key-example",
-      "kind": "antimicrox",
-      "game": "Gobliins 6",
-      "title": "Pad2Key — exemple de départ",
-      "author": "Thomson",
-      "description": "Profil de départ converti depuis le Pad2Key fourni pendant le développement.",
-      "notes": "Exemple sans les ajouts Hotkey personnalisés ultérieurs. Vérifier les réglages de souris et adapter au jeu.",
-      "tested_on": "Exemple de conversion ; les versions de jeu et runner ne sont pas spécifiées.",
-      "hotkey": "",
-      "requirements": [
-        "AntiMicroX 3.6.1, uinput",
-        "Manette SDL GameController"
-      ],
-      "file": "antimicrox/gobliins-6-pad2key-example.amgp",
-      "sha256": "bc1fffbaea3d5a9aec18a9af0c3f5d198eece07e60b2970dd0242c3251653d8e"
-    },
-    {
       "id": "max-payne-acc0b342",
       "kind": "antimicrox",
       "game": "Max Payne",
