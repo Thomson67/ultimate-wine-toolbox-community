@@ -1,7 +1,7 @@
 # Déployer le service communautaire sur Cloudflare Free
 
 Le dépôt des profils est `Thomson67/ultimate-wine-toolbox-community` et le Worker préparé
-est `https://uwt-community-api.roeckel.workers.dev`. Aucun secret n'est présent dans ce dépôt.
+est `https://uwt-community-api.thomson67.workers.dev`. Aucun secret n'est présent dans ce dépôt.
 Le service n'est pas opérationnel tant que les étapes ci-dessous ne sont pas terminées.
 
 ## Mise à jour depuis la première version (Worker version 1)
@@ -15,7 +15,7 @@ envoyées sont conservées.
 3. Vérifier `/health` : `version` doit valoir **2** et `configured` doit rester `true`.
 4. Installer la version de test mise à jour de la Toolbox.
 5. Ouvrir **Espace validateur** sur Batocera : une adresse et un code comme `K7MP-4RXN` apparaissent.
-6. Sur votre PC ou téléphone, ouvrir <https://uwt-community-api.roeckel.workers.dev/pair>.
+6. Sur votre PC ou téléphone, ouvrir <https://uwt-community-api.thomson67.workers.dev/pair>.
 7. Coller la **clé validateur** dans la page et se connecter. Elle n'est plus saisie sur Batocera.
 8. Saisir le code affiché sur Batocera, cliquer sur **Vérifier le code**, puis vérifier le nom de l'appareil.
 9. Cocher si souhaité **Autoriser cet appareil pendant 30 jours**, puis confirmer l'autorisation.
@@ -115,7 +115,7 @@ Le dépôt cible et la branche `main` sont fixés dans le code du service.
 
 Ouvrir ensuite :
 
-<https://uwt-community-api.roeckel.workers.dev/health>
+<https://uwt-community-api.thomson67.workers.dev/health>
 
 La réponse attendue contient :
 
@@ -149,7 +149,7 @@ l'ancien dépôt, la remplacer explicitement par :
 {
   "repository": "Thomson67/ultimate-wine-toolbox-community",
   "ref": "main",
-  "api": "https://uwt-community-api.roeckel.workers.dev"
+  "api": "https://uwt-community-api.thomson67.workers.dev"
 }
 ```
 
@@ -236,3 +236,13 @@ base SQLite en mémoire avec adaptation de l'API D1 et une simulation GitHub ; i
 créent aucune proposition réelle et ne publient rien sur GitHub. `dist/worker.js` est le
 bundle prêt pour le tableau de bord. Le fichier `wrangler.jsonc.example` permet aussi un
 déploiement par Wrangler après remplacement de l'identifiant de base, pour un mainteneur.
+
+## Renommer le sous-domaine workers.dev
+
+Après renommage, mettre à jour la Toolbox et tout champ `api` explicitement défini
+dans `config/community-source.json`. Les adresses du service, de `/health` et de
+`/pair` changent ensemble. La page d’appairage utilise des chemins relatifs : le
+Worker et son bundle n’ont pas besoin d’être redéployés pour ce seul changement.
+La base D1, les secrets Cloudflare et la clé validateur sont conservés. La Toolbox
+lie ses autorisations mémorisées à l’origine HTTPS : refaire l’appairage sur la
+nouvelle adresse. Le catalogue et les profils sur GitHub restent inchangés.
