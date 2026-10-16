@@ -8,7 +8,7 @@ async function setup() {
  const sql=new DatabaseSync(':memory:');sql.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
  const DB={prepare(q){return {bind(...a){const s=sql.prepare(q);return {
  async first(){return s.get(...a)||null},async all(){return {results:s.all(...a)}},async run(){return {meta:{changes:Number(s.run(...a).changes)}}}
- }}}},async batch(items){return Promise.all(items.map(i=>i.run()))}};
+ }}}},async batch(items){sql.exec('BEGIN');try{const results=[];for(const item of items)results.push(await item.run());sql.exec('COMMIT');return results;}catch(error){sql.exec('ROLLBACK');throw error;}}};
  const key='ab'.repeat(32);return {sql,key,env:{DB,ADMIN_KEY_HASH:await sha256(key),GITHUB_TOKEN:'mock-only'}};
 }
 async function payload(kind='antimicrox',id='my-game-12345678') {
@@ -101,4 +101,92 @@ test('migrated catalogue fixtures pass the same server-side checks',async()=>{
 });
 test('malformed and duplicate ReShade INI is refused before entering queue',async()=>{
  const p=await payload('reshade');for(const profile of ['Techniques=CAS\nnot an option\n','Techniques=CAS\n[CAS]\na=1\na=2\n','Techniques=CAS\n[bad\n'])await assert.rejects(validateSubmission({...p,profile,metadata:{...p.metadata,sha256:await sha256(profile)}}));
+});
+async function startPair(env,secret='12'.repeat(32)){return call(env,'/v1/pair/start',{method:'POST',data:{secret,name:'BATOCERA Test'}})}
+async function approvePair(env,key,code,remember=false){const token=await login(env,key);return {token,result:await call(env,'/v1/pair/approve',{method:'POST',token,data:{code,remember}})}}
+test('pairing without remembering requires approval, yields a short session, and cannot manage devices',async()=>{
+ const {env,key,sql}=await setup(),secret='12'.repeat(32),started=await startPair(env,secret),code=started.body.code;
+ assert.equal(started.status,200);assert.match(code,/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+ assert.equal((await call(env,'/v1/pending?kind=antimicrox',{token:secret})).status,401);
+ assert.equal((await call(env,'/v1/pair/approve',{method:'POST',data:{code,remember:false}})).status,401);
+ assert.equal((await call(env,'/v1/pair/poll',{method:'POST',data:{secret:code}})).status,400);
+ const master=await login(env,key);
+ const inspected=await call(env,'/v1/pair/inspect',{method:'POST',token:master,data:{code}});assert.equal(inspected.body.name,'BATOCERA Test');
+ assert.equal((await call(env,'/v1/pair/approve',{method:'POST',token:master,data:{code,remember:false}})).status,200);
+ const polled=await call(env,'/v1/pair/poll',{method:'POST',data:{secret}});assert.equal(polled.body.status,'approved');assert.equal(polled.body.remember,false);
+ assert.ok(polled.body.expires<=Math.floor(Date.now()/1000)+1800);
+ assert.equal((await call(env,'/v1/pending?kind=antimicrox',{token:secret})).status,200);
+ assert.equal((await call(env,'/v1/devices',{token:secret})).status,403);
+ assert.equal((await call(env,'/v1/pair/approve',{method:'POST',token:master,data:{code,remember:false}})).status,410);
+ assert.equal(sql.prepare('SELECT count(*) n FROM devices').get().n,0);
+ assert.notEqual(sql.prepare('SELECT device_hash FROM pairings').get().device_hash,secret);
+});
+test('remembered grant creates short sessions; master revocation invalidates all of them',async()=>{
+ const {env,key}=await setup(),secret='34'.repeat(32),code=(await startPair(env,secret)).body.code;
+ const {token:master,result}=await approvePair(env,key,code,true);assert.equal(result.status,200);
+ assert.equal((await call(env,'/v1/pending?kind=antimicrox',{token:secret})).status,401);
+ const a=await call(env,'/v1/device/login',{method:'POST',data:{secret}}),b=await call(env,'/v1/device/login',{method:'POST',data:{secret}});
+ assert.equal(a.status,200);assert.notEqual(a.body.token,b.body.token);assert.ok(a.body.expires<=Math.floor(Date.now()/1000)+1800);
+ assert.equal((await call(env,'/v1/pending?kind=antimicrox',{token:a.body.token})).status,200);
+ assert.equal((await call(env,'/v1/devices',{token:a.body.token})).status,403);
+ const list=await call(env,'/v1/devices',{token:master});assert.equal(list.body.devices.length,1);assert.notEqual(list.body.devices[0].id,secret);
+ await call(env,'/v1/devices/revoke',{method:'POST',token:master,data:{id:list.body.devices[0].id}});
+ for(const token of [a.body.token,b.body.token])assert.equal((await call(env,'/v1/pending?kind=antimicrox',{token})).status,401);
+ assert.equal((await call(env,'/v1/device/login',{method:'POST',data:{secret}})).status,401);
+});
+test('cancelling after approval revokes both temporary and remembered access',async()=>{
+ for(const remember of [false,true]){
+  const {env,key}=await setup(),secret='56'.repeat(32),code=(await startPair(env,secret)).body.code;await approvePair(env,key,code,remember);
+  const token=remember?(await call(env,'/v1/device/login',{method:'POST',data:{secret}})).body.token:secret;
+  await call(env,'/v1/pair/cancel',{method:'POST',data:{secret}});
+  assert.equal((await call(env,'/v1/pending?kind=antimicrox',{token})).status,401);
+  assert.equal((await call(env,'/v1/pair/poll',{method:'POST',data:{secret}})).status,410);
+ }
+});
+test('expired pairings and expired grants cannot authorize access',async()=>{
+ const {env,key,sql}=await setup(),secret='78'.repeat(32),code=(await startPair(env,secret)).body.code,master=await login(env,key);
+ sql.prepare('UPDATE pairings SET expires=0').run();
+ assert.equal((await call(env,'/v1/pair/approve',{method:'POST',token:master,data:{code,remember:true}})).status,410);
+ assert.equal((await call(env,'/v1/pair/poll',{method:'POST',data:{secret}})).status,410);
+ const next='90'.repeat(32),code2=(await startPair(env,next)).body.code;await approvePair(env,key,code2,true);
+ const token=(await call(env,'/v1/device/login',{method:'POST',data:{secret:next}})).body.token;sql.prepare('UPDATE devices SET expires=0').run();
+ assert.equal((await call(env,'/v1/pending?kind=antimicrox',{token})).status,401);
+});
+test('failed credential creation rolls back pairing approval atomically',async()=>{
+ const {env,key,sql}=await setup(),code=(await startPair(env)).body.code,master=await login(env,key);
+ sql.exec("CREATE TRIGGER test_fail BEFORE INSERT ON device_sessions BEGIN SELECT RAISE(ABORT,'simulated failure'); END");
+ assert.equal((await call(env,'/v1/pair/approve',{method:'POST',token:master,data:{code,remember:false}})).status,503);
+ assert.equal(sql.prepare('SELECT status FROM pairings').get().status,'pending');
+ assert.equal(sql.prepare('SELECT count(*) n FROM sessions').get().n,1);
+});
+test('pairing creation is limited and malformed approval cannot grant access',async()=>{
+ const {env,key}=await setup();const code=(await startPair(env)).body.code,master=await login(env,key);
+ assert.equal((await call(env,'/v1/pair/approve',{method:'POST',token:master,data:{code,remember:'true'}})).status,400);
+ for(let i=1;i<5;i++)await startPair(env,String(i).repeat(64));
+ assert.equal((await startPair(env,'ff'.repeat(32))).status,429);
+});
+test('pairing page has restrictive CSP, no persistent browser key storage, and valid script',async()=>{
+ const {env}=await setup();const r=await worker.fetch(new Request('https://example.workers.dev/pair'),env),html=await r.text();
+ assert.equal(r.status,200);assert.match(r.headers.get('Content-Security-Policy'),/frame-ancestors 'none'/);assert.equal(r.headers.get('Cache-Control'),'no-store');
+ assert.ok(!html.includes('__NONCE__'));assert.ok(!html.includes('localStorage'));assert.ok(!html.includes('sessionStorage'));assert.ok(!html.includes('innerHTML'));
+ const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1];new Function(script);
+});
+test('rerunning schema migration preserves existing proposals',async()=>{
+ const {env,sql}=await setup(),p=await payload();await call(env,'/v1/submissions',{method:'POST',data:p});sql.exec(readFileSync(new URL('../schema.sql',import.meta.url),'utf8'));
+ assert.equal(sql.prepare('SELECT id FROM submissions').get().id,p.metadata.id);
+});
+test('pairing page browser handlers sign in, inspect, approve, and revoke without persisting key',async()=>{
+ const {runInNewContext}=await import('node:vm');const {env}=await setup();
+ const html=await (await worker.fetch(new Request('https://example.workers.dev/pair'),env)).text();const script=html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1];
+ const nodes=new Map();function node(id){if(!nodes.has(id))nodes.set(id,{value:'',checked:false,hidden:false,disabled:false,textContent:'',events:{},children:[],addEventListener(event,fn){this.events[event]=fn},replaceChildren(){this.children=[]},append(...a){this.children.push(...a)}});return nodes.get(id)}
+ const requests=[];const replies=[{token:'ab'.repeat(32)},{devices:[]},{code:'K7MP4RXN',name:'BATOCERA',expires:9999999999},{ok:true},{devices:[{id:'cd'.repeat(32),name:'BATOCERA',expires:9999999999}]},{ok:true},{devices:[]}];
+ const context={document:{documentElement:{},getElementById:node,querySelectorAll:()=>[],createElement:type=>node(type+Math.random())},navigator:{language:'fr'},window:{addEventListener(){}},confirm:()=>true,fetch:async(path,options)=>{requests.push({path,options});return {ok:true,status:200,json:async()=>replies.shift()}}};
+ runInNewContext(script,context);
+ async function event(id,type='click'){node(id).events[type]({preventDefault(){},submitter:node(id)});await new Promise(setImmediate);}
+ node('key').value='12'.repeat(32);await event('loginForm','submit');assert.equal(node('key').value,'');assert.equal(node('authorized').hidden,false);
+ node('code').value='K7MP-4RXN';await event('inspectForm','submit');assert.equal(node('requestName').textContent,'BATOCERA');assert.equal(node('remember').checked,false);
+ node('remember').checked=true;await event('approve');assert.ok(requests.some(r=>r.path==='/v1/pair/approve'&&JSON.parse(r.options.body).remember===true));
+ const row=node('devices').children[0];assert.ok(row);const revoke=row.children[1];revoke.events.click();await new Promise(setImmediate);
+ assert.ok(requests.some(r=>r.path==='/v1/devices/revoke'));assert.equal(node('devices').textContent,'Aucun appareil mémorisé.');
+ assert.ok(requests.every(r=>!r.path.includes('12'.repeat(32))));assert.equal(replies.length,0);
 });

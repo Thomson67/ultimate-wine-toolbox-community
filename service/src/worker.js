@@ -1,3 +1,4 @@
+import {pairingPage, pairingRoute} from './pairing.js';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 export const PROFILE_LIMIT = 64 * 1024;
@@ -97,7 +98,7 @@ async function ipKey(request, env) {
 async function authorized(request,env) {
   const token=(request.headers.get('authorization')||'').match(/^Bearer ([a-f0-9]{64})$/)?.[1];
   requireValue(token, 'Validator login required',401);
-  const session=await env.DB.prepare('SELECT hash FROM sessions WHERE hash=? AND expires>?').bind(await sha256(token),now()).first();
+  const session=await env.DB.prepare("SELECT s.hash FROM sessions s LEFT JOIN device_sessions ds ON ds.session_hash=s.hash LEFT JOIN devices d ON d.hash=ds.device_hash WHERE s.hash=? AND s.expires>? AND (ds.session_hash IS NULL OR ds.device_hash='' OR d.expires>unixepoch())").bind(await sha256(token),now()).first();
   requireValue(session,'Validator session expired',401);
   return token;
 }
@@ -137,8 +138,11 @@ export async function publish(env, submission, api=github) {
 }
 async function route(request,env) {
   const url=new URL(request.url), path=url.pathname;
-  if(request.method==='GET' && (path==='/'||path==='/health')) return response({service:'uwt-community',version:1,configured:!!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||'')),profile_limit:PROFILE_LIMIT});
+  if(request.method==='GET' && (path==='/'||path==='/health')) return response({service:'uwt-community',version:2,configured:!!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||'')),profile_limit:PROFILE_LIMIT});
   requireValue(env.DB && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||''),'Service is not configured',503);
+  if(request.method==='GET' && path==='/pair') return pairingPage();
+  const paired=await pairingRoute(request,env,{body,rate,ipKey,sha256,requireValue,response,authorized,text});
+  if(paired) return paired;
   if(request.method==='POST' && path==='/v1/login') {
     await rate(env,'login:'+await ipKey(request,env),10,900);
     const value=await body(request,1024);
@@ -201,6 +205,9 @@ async function route(request,env) {
 export async function cleanup(env) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM sessions WHERE expires<?').bind(now()),
+    env.DB.prepare('DELETE FROM pairings WHERE expires<?').bind(now()),
+    env.DB.prepare('DELETE FROM devices WHERE expires<?').bind(now()),
+    env.DB.prepare('DELETE FROM device_sessions WHERE session_hash NOT IN (SELECT hash FROM sessions)').bind(),
     env.DB.prepare('DELETE FROM rate_limits WHERE expires<?').bind(now()),
     env.DB.prepare("DELETE FROM submissions WHERE created<? AND status IN ('approved','rejected')").bind(now()-30*86400),
     env.DB.prepare("DELETE FROM submissions WHERE created<? AND (status='pending' OR (status='publishing' AND lease_until<unixepoch()))").bind(now()-30*86400)

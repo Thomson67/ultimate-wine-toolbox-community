@@ -1,3 +1,156 @@
+// src/pairing-page.js
+var page = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UWT \u2014 Appairage validateur</title>
+<style nonce="__NONCE__">
+:root{font:18px/1.55 system-ui,sans-serif;color:#e7edf6;background:#131b29;color-scheme:dark}body{margin:0}main{max-width:760px;margin:40px auto;padding:0 24px}h1{font-size:1.8rem;line-height:1.2}h2{font-size:1.2rem}section{border:1px solid #3d4e66;border-radius:12px;padding:22px;margin:22px 0;background:#1b2738}label{display:block;margin:14px 0 6px}input:not([type=checkbox]){box-sizing:border-box;width:100%;font:inherit;padding:12px;border:1px solid #71839a;border-radius:6px}button{font:inherit;padding:10px 16px;margin:12px 8px 0 0;border:0;border-radius:6px;background:#91c9ff;color:#122238;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.secondary{background:#354860;color:white}#code{font:1.4rem monospace;letter-spacing:4px}#message{white-space:pre-wrap;color:#f5d190}small{display:block;color:#c3cfdf}.device{border-top:1px solid #526179;padding:14px 0;overflow-wrap:anywhere}[hidden]{display:none!important}select{font:inherit}a{color:#91c9ff}#requestName{overflow-wrap:anywhere}
+</style></head><body><main>
+<select id="language" aria-label="Language"><option value="fr">Fran\xE7ais</option><option value="en">English</option></select>
+<h1 data-t="title"></h1><p data-t="intro"></p><p id="message" role="status" aria-live="polite"></p>
+<section id="loginSection"><h2 data-t="loginTitle"></h2><form id="loginForm">
+<label for="key" data-t="key"></label><input type="password" id="key" name="validator-key" autocomplete="current-password" required maxlength="64" spellcheck="false">
+<small data-t="keyHelp"></small><button type="submit" data-t="login"></button></form></section>
+<div id="authorized" hidden>
+<section><h2 data-t="pairTitle"></h2><p data-t="warning"></p><form id="inspectForm">
+<label for="code" data-t="code"></label><input id="code" name="code" required maxlength="12" autocomplete="off" spellcheck="false" placeholder="K7MP-4RXN"><button type="submit" data-t="inspect"></button></form>
+<div id="request" hidden><p><strong data-t="device"></strong> <span id="requestName"></span></p><p id="requestExpiry"></p>
+<label><input type="checkbox" id="remember"> <span data-t="remember"></span></label><button id="approve" data-t="approve"></button></div>
+</section>
+<section><h2 data-t="devicesTitle"></h2><p data-t="devicesHelp"></p><button id="refresh" class="secondary" data-t="refresh"></button><div id="devices"></div></section>
+<button id="logout" class="secondary" data-t="logout"></button></div>
+<small data-t="footer"></small>
+<script nonce="__NONCE__">
+'use strict';
+const words={fr:{title:'Autoriser un Batocera',intro:'Ultimate Wine Toolbox \u2014 acc\xE8s validateur AntiMicroX et ReShade.',loginTitle:'Connexion du validateur',key:'Cl\xE9 validateur',keyHelp:'Collez ici votre cl\xE9 de 64 caract\xE8res depuis votre gestionnaire de mots de passe. Elle reste sur cette page le temps de la connexion et n\u2019est pas enregistr\xE9e dans le navigateur.',login:'Se connecter',pairTitle:'Appairer la Toolbox',warning:'Autorisez uniquement une demande que vous venez de lancer vous-m\xEAme sur votre Batocera. Comparez le code et le nom de l\u2019appareil avant de confirmer.',code:'Code affich\xE9 dans la Toolbox',inspect:'V\xE9rifier le code',device:'Appareil :',remember:'Autoriser cet appareil pendant 30 jours',approve:'Confirmer et autoriser cet appareil',devicesTitle:'Appareils m\xE9moris\xE9s',devicesHelp:'R\xE9voquer un appareil bloque aussi ses sessions de validation d\xE9j\xE0 ouvertes.',refresh:'Actualiser la liste',logout:'Fermer ma session sur cette page',footer:'Le code seul ne donne aucun acc\xE8s. Les propositions restent soumises \xE0 votre validation dans la Toolbox.',connected:'Connect\xE9. Vous pouvez v\xE9rifier le code affich\xE9 sur Batocera.',approved:'Appareil autoris\xE9. La Toolbox va ouvrir automatiquement l\u2019espace validateur.',revoked:'Acc\xE8s de l\u2019appareil r\xE9voqu\xE9.',none:'Aucun appareil m\xE9moris\xE9.',revoke:'R\xE9voquer',confirmRevoke:'R\xE9voquer cet appareil et ses sessions ?',expires:'Expiration : ',error:'Erreur : ',expired:'Session expir\xE9e. Reconnectez-vous.',confirmApprove:'Confirmez-vous que ce code correspond \xE0 la demande affich\xE9e sur votre Batocera ?'},en:{title:'Authorize a Batocera',intro:'Ultimate Wine Toolbox \u2014 AntiMicroX and ReShade validator access.',loginTitle:'Validator sign-in',key:'Validator key',keyHelp:'Paste your 64-character key from your password manager. This page uses it for sign-in and does not save it in the browser.',login:'Sign in',pairTitle:'Pair the Toolbox',warning:'Only approve a request you just started on your own Batocera. Compare the code and device name before confirming.',code:'Code shown in the Toolbox',inspect:'Check code',device:'Device:',remember:'Authorize this device for 30 days',approve:'Confirm and authorize this device',devicesTitle:'Remembered devices',devicesHelp:'Revoking a device also blocks its current validator sessions.',refresh:'Refresh list',logout:'Sign out of this page',footer:'The code alone grants no access. Contributions still require your approval inside the Toolbox.',connected:'Signed in. Check the code shown on Batocera.',approved:'Device authorized. The Toolbox will open the validator menu automatically.',revoked:'Device access revoked.',none:'No remembered devices.',revoke:'Revoke',confirmRevoke:'Revoke this device and its sessions?',expires:'Expires: ',error:'Error: ',expired:'Session expired. Sign in again.',confirmApprove:'Do you confirm that this code matches the request displayed on your Batocera?'}};
+const el=id=>document.getElementById(id);let language=navigator.language.startsWith('fr')?'fr':'en',token='',checkedCode='';
+const t=key=>words[language][key];
+function translate(){document.documentElement.lang=language;el('language').value=language;document.querySelectorAll('[data-t]').forEach(n=>n.textContent=t(n.dataset.t));}
+function message(value){el('message').textContent=value;}
+function clearLogin(){token='';checkedCode='';el('key').value='';el('authorized').hidden=true;el('loginSection').hidden=false;el('request').hidden=true;el('devices').replaceChildren();}
+async function api(path,data){const r=await fetch(path,{method:data===undefined?'GET':'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});const result=await r.json();if(!r.ok){if(r.status===401)clearLogin();throw Error(result.error||r.status);}return result;}
+async function action(button,fn){button.disabled=true;try{await fn();}catch(e){message(t('error')+e.message);}finally{button.disabled=false;}}
+async function devices(){const result=await api('/v1/devices');el('devices').replaceChildren();if(!result.devices.length){el('devices').textContent=t('none');return;}for(const d of result.devices){const row=document.createElement('div');row.className='device';const label=document.createElement('p');label.textContent=d.name+' \u2014 '+t('expires')+new Date(d.expires*1000).toLocaleString();const button=document.createElement('button');button.className='secondary';button.textContent=t('revoke');button.addEventListener('click',()=>action(button,async()=>{if(!confirm(t('confirmRevoke')))return;await api('/v1/devices/revoke',{id:d.id});await devices();message(t('revoked'));}));row.append(label,button);el('devices').append(row);}}
+el('language').addEventListener('change',()=>{language=el('language').value;translate();if(token)devices().catch(e=>message(t('error')+e.message));});
+el('loginForm').addEventListener('submit',event=>{event.preventDefault();action(event.submitter,async()=>{const key=el('key').value.trim();el('key').value='';const result=await api('/v1/login',{key});token=result.token;el('loginSection').hidden=true;el('authorized').hidden=false;message(t('connected'));await devices();});});
+el('code').addEventListener('input',()=>{checkedCode='';el('request').hidden=true;});
+el('inspectForm').addEventListener('submit',event=>{event.preventDefault();action(event.submitter,async()=>{checkedCode='';el('request').hidden=true;const result=await api('/v1/pair/inspect',{code:el('code').value});checkedCode=result.code;el('requestName').textContent=result.name;el('requestExpiry').textContent=t('expires')+new Date(result.expires*1000).toLocaleTimeString();el('remember').checked=false;el('request').hidden=false;message('');});});
+el('approve').addEventListener('click',()=>action(el('approve'),async()=>{if(!checkedCode||!confirm(t('confirmApprove')))return;await api('/v1/pair/approve',{code:checkedCode,remember:el('remember').checked});checkedCode='';el('request').hidden=true;el('code').value='';message(t('approved'));await devices();}));
+el('refresh').addEventListener('click',()=>action(el('refresh'),devices));
+el('logout').addEventListener('click',()=>action(el('logout'),async()=>{try{await api('/v1/logout',{});}finally{clearLogin();message('');}}));
+window.addEventListener('pagehide',clearLogin);translate();
+<\/script></main></body></html>`;
+
+// src/pairing.js
+var now = () => Math.floor(Date.now() / 1e3);
+var randomToken = () => crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
+var tokenPattern = /^[a-f0-9]{64}$/;
+var alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+var codes = (value) => typeof value === "string" ? value.toUpperCase().replace(/[ -]/g, "") : "";
+function pairingPage() {
+  const nonce = randomToken();
+  return new Response(page.replaceAll("__NONCE__", nonce), { headers: {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`
+  } });
+}
+async function pairingRoute(request, env, h) {
+  const { body: body2, rate: rate2, ipKey: ipKey2, sha256: sha2562, requireValue: check, response: response2, authorized: authorized2, text: text2 } = h;
+  const path = new URL(request.url).pathname;
+  if (!["/v1/pair/start", "/v1/pair/poll", "/v1/pair/cancel", "/v1/pair/inspect", "/v1/pair/approve", "/v1/device/login", "/v1/device/forget", "/v1/devices", "/v1/devices/revoke"].includes(path)) return null;
+  const db = env.DB;
+  async function master() {
+    const token = await authorized2(request, env);
+    const paired = await db.prepare("SELECT session_hash FROM device_sessions WHERE session_hash=?").bind(await sha2562(token)).first();
+    check(!paired, "Use the validator key on the pairing page to manage devices", 403);
+    await rate2(env, "manage:" + await ipKey2(request, env), 60, 900);
+  }
+  async function secretHash(value) {
+    check(tokenPattern.test(value?.secret || ""), "Invalid device secret");
+    return sha2562(value.secret);
+  }
+  async function revoke(hash) {
+    await db.batch([
+      db.prepare("DELETE FROM sessions WHERE hash=? OR hash IN (SELECT session_hash FROM device_sessions WHERE device_hash=?)").bind(hash, hash),
+      db.prepare("DELETE FROM device_sessions WHERE device_hash=? OR session_hash=?").bind(hash, hash),
+      db.prepare("DELETE FROM devices WHERE hash=?").bind(hash),
+      db.prepare("DELETE FROM pairings WHERE device_hash=?").bind(hash)
+    ]);
+  }
+  if (path === "/v1/pair/start" && request.method === "POST") {
+    await rate2(env, "pair-start:" + await ipKey2(request, env), 5, 3600);
+    await rate2(env, "pair-start-global", 100, 3600);
+    const v2 = await body2(request, 1024), hash = await secretHash(v2), name = text2(v2.name, 80);
+    check(name, "Missing device name");
+    const code2 = [...crypto.getRandomValues(new Uint8Array(8))].map((v3) => alphabet[v3 & 31]).join("");
+    const expires2 = now() + 300;
+    const r = await db.prepare("INSERT INTO pairings(device_hash,code,name,expires) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM pairings WHERE expires>?)<100").bind(hash, code2, name, expires2, now()).run();
+    check(r.meta.changes === 1, "Too many pending pairings", 429);
+    return response2({ code: code2.slice(0, 4) + "-" + code2.slice(4), expires: expires2, interval: 5 });
+  }
+  if (["/v1/pair/poll", "/v1/pair/cancel"].includes(path) && request.method === "POST") {
+    await rate2(env, "pair-poll:" + await ipKey2(request, env), 300, 600);
+    const hash = await secretHash(await body2(request, 1024));
+    const p2 = await db.prepare("SELECT * FROM pairings WHERE device_hash=? AND expires>?").bind(hash, now()).first();
+    check(p2, "Pairing expired or cancelled", 410);
+    if (path.endsWith("/cancel")) {
+      await revoke(hash);
+      return response2({ ok: true });
+    }
+    return response2({ status: p2.status, remember: p2.remember === 1, expires: p2.access_expires, pair_expires: p2.expires });
+  }
+  if (path === "/v1/device/login" && request.method === "POST") {
+    await rate2(env, "device-login:" + await ipKey2(request, env), 60, 900);
+    const hash = await secretHash(await body2(request, 1024));
+    const d = await db.prepare("SELECT hash,expires FROM devices WHERE hash=? AND expires>?").bind(hash, now()).first();
+    check(d, "Device access expired or revoked", 401);
+    const token = randomToken(), tokenHash = await sha2562(token), expires2 = Math.min(now() + 1800, d.expires);
+    await db.batch([
+      db.prepare("INSERT INTO sessions(hash,expires) SELECT ?,? FROM devices WHERE hash=? AND expires>?").bind(tokenHash, expires2, hash, now()),
+      db.prepare("INSERT INTO device_sessions(session_hash,device_hash) SELECT hash,? FROM sessions WHERE hash=?").bind(hash, tokenHash)
+    ]);
+    const created = await db.prepare("SELECT hash FROM sessions WHERE hash=?").bind(tokenHash).first();
+    check(created, "Device access revoked", 401);
+    return response2({ token, expires: expires2 });
+  }
+  if (path === "/v1/device/forget" && request.method === "POST") {
+    await rate2(env, "device-forget:" + await ipKey2(request, env), 30, 900);
+    const hash = await secretHash(await body2(request, 1024));
+    await revoke(hash);
+    return response2({ ok: true });
+  }
+  await master();
+  if (path === "/v1/devices" && request.method === "GET") {
+    const rows = await db.prepare("SELECT hash AS id,name,created,expires FROM devices WHERE expires>? ORDER BY created DESC LIMIT 100").bind(now()).all();
+    return response2({ devices: rows.results });
+  }
+  check(request.method === "POST", "Unsupported method", 405);
+  const v = await body2(request, 1024);
+  if (path === "/v1/devices/revoke") {
+    check(tokenPattern.test(v.id || ""), "Invalid device identifier");
+    await revoke(v.id);
+    return response2({ ok: true });
+  }
+  const code = codes(v.code);
+  check(/^[A-HJ-NP-Z2-9]{8}$/.test(code), "Invalid pairing code");
+  const p = await db.prepare("SELECT * FROM pairings WHERE code=? AND status='pending' AND expires>?").bind(code, now()).first();
+  check(p, "Pairing code expired, already used or unknown", 410);
+  if (path === "/v1/pair/inspect") return response2({ code: p.code, name: p.name, expires: p.expires });
+  check(path === "/v1/pair/approve" && typeof v.remember === "boolean", "Invalid pairing approval");
+  const expires = now() + (v.remember ? 30 * 86400 : 1800), args = [p.device_hash, now()];
+  const statements = v.remember ? [
+    db.prepare("INSERT INTO devices(hash,name,created,expires) SELECT device_hash,name,?,? FROM pairings WHERE device_hash=? AND status='pending' AND expires>?").bind(now(), expires, ...args)
+  ] : [
+    db.prepare("INSERT INTO sessions(hash,expires) SELECT device_hash,? FROM pairings WHERE device_hash=? AND status='pending' AND expires>?").bind(expires, ...args),
+    db.prepare("INSERT INTO device_sessions(session_hash,device_hash) SELECT device_hash,'' FROM pairings WHERE device_hash=? AND status='pending' AND expires>?").bind(...args)
+  ];
+  statements.push(db.prepare("UPDATE pairings SET status='approved',remember=?,access_expires=? WHERE device_hash=? AND status='pending' AND expires>?").bind(v.remember ? 1 : 0, expires, ...args));
+  const results = await db.batch(statements);
+  check(results.at(-1).meta.changes === 1, "Pairing already processed", 409);
+  return response2({ ok: true, remember: v.remember, expires });
+}
+
 // node_modules/fast-xml-parser/src/util.js
 var nameStartChar = ":A-Za-z_\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF\\u200C-\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD";
 var nameChar = nameStartChar + "\\-.\\d\\u00B7\\u0300-\\u036F\\u203F-\\u2040";
@@ -4144,7 +4297,7 @@ var MODES = /* @__PURE__ */ new Set([
   "mix"
 ]);
 var enc = new TextEncoder();
-var now = () => Math.floor(Date.now() / 1e3);
+var now2 = () => Math.floor(Date.now() / 1e3);
 var Failure = class extends Error {
   constructor(status, message) {
     super(message);
@@ -4261,7 +4414,7 @@ function response(value, status = 200) {
   return Response.json(value, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
 async function rate(env, key, max, seconds) {
-  const bucket = Math.floor(now() / seconds);
+  const bucket = Math.floor(now2() / seconds);
   const r = await env.DB.prepare("INSERT INTO rate_limits(key,count,expires) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 WHERE count < ? RETURNING count").bind(`${key}:${bucket}`, (bucket + 1) * seconds, max).first();
   requireValue(r, "Too many requests; try later", 429);
 }
@@ -4272,7 +4425,7 @@ async function ipKey(request, env) {
 async function authorized(request, env) {
   const token = (request.headers.get("authorization") || "").match(/^Bearer ([a-f0-9]{64})$/)?.[1];
   requireValue(token, "Validator login required", 401);
-  const session = await env.DB.prepare("SELECT hash FROM sessions WHERE hash=? AND expires>?").bind(await sha256(token), now()).first();
+  const session = await env.DB.prepare("SELECT s.hash FROM sessions s LEFT JOIN device_sessions ds ON ds.session_hash=s.hash LEFT JOIN devices d ON d.hash=ds.device_hash WHERE s.hash=? AND s.expires>? AND (ds.session_hash IS NULL OR ds.device_hash='' OR d.expires>unixepoch())").bind(await sha256(token), now2()).first();
   requireValue(session, "Validator session expired", 401);
   return token;
 }
@@ -4319,16 +4472,19 @@ async function publish(env, submission, api = github) {
 }
 async function route(request, env) {
   const url = new URL(request.url), path = url.pathname;
-  if (request.method === "GET" && (path === "/" || path === "/health")) return response({ service: "uwt-community", version: 1, configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
+  if (request.method === "GET" && (path === "/" || path === "/health")) return response({ service: "uwt-community", version: 2, configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
   requireValue(env.DB && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || ""), "Service is not configured", 503);
+  if (request.method === "GET" && path === "/pair") return pairingPage();
+  const paired = await pairingRoute(request, env, { body, rate, ipKey, sha256, requireValue, response, authorized, text });
+  if (paired) return paired;
   if (request.method === "POST" && path === "/v1/login") {
     await rate(env, "login:" + await ipKey(request, env), 10, 900);
     const value = await body(request, 1024);
     requireValue(typeof value.key === "string" && /^[a-f0-9]{64}$/.test(value.key), "Invalid validator key", 401);
     requireValue(await sha256(value.key) === env.ADMIN_KEY_HASH, "Invalid validator key", 401);
     const token2 = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
-    await env.DB.prepare("INSERT INTO sessions(hash,expires) VALUES(?,?)").bind(await sha256(token2), now() + 1800).run();
-    return response({ token: token2, expires: now() + 1800 });
+    await env.DB.prepare("INSERT INTO sessions(hash,expires) VALUES(?,?)").bind(await sha256(token2), now2() + 1800).run();
+    return response({ token: token2, expires: now2() + 1800 });
   }
   if (request.method === "POST" && path === "/v1/submissions") {
     await rate(env, "submit:" + await ipKey(request, env), 5, 86400);
@@ -4340,7 +4496,7 @@ async function route(request, env) {
       requireValue(existing.sha256 === m.sha256 && existing.metadata === JSON.stringify(m), "Identifier collision", 409);
       return response({ id: m.id, status: existing.status });
     }
-    const r = await env.DB.prepare("INSERT INTO submissions(id,kind,metadata,profile,sha256,created) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM submissions WHERE status IN ('pending','publishing'))<200").bind(m.id, m.kind, JSON.stringify(m), value.profile, m.sha256, now()).run();
+    const r = await env.DB.prepare("INSERT INTO submissions(id,kind,metadata,profile,sha256,created) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM submissions WHERE status IN ('pending','publishing'))<200").bind(m.id, m.kind, JSON.stringify(m), value.profile, m.sha256, now2()).run();
     requireValue(r.meta.changes === 1, "Review queue is full; try later", 503);
     return response({ id: m.id, status: "pending" }, 201);
   }
@@ -4362,14 +4518,14 @@ async function route(request, env) {
   if (!match[2] && request.method === "GET") return response({ metadata: JSON.parse(row.metadata), profile: row.profile, status: row.status });
   requireValue(request.method === "POST" && match[2], "Unsupported method", 405);
   if (match[2] === "reject") {
-    const r = await env.DB.prepare("UPDATE submissions SET status='rejected',profile='' WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(row.id, now()).run();
+    const r = await env.DB.prepare("UPDATE submissions SET status='rejected',profile='' WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(row.id, now2()).run();
     requireValue(r.meta.changes === 1, "Contribution already processed or being published", 409);
     return response({ status: "rejected" });
   }
   if (row.status === "approved") return response({ status: "approved", commit: row.commit_sha });
   requireValue(env.GITHUB_TOKEN, "GitHub secret is missing", 503);
   const lease = crypto.randomUUID();
-  const claimed = await env.DB.prepare("UPDATE submissions SET status='publishing',lease=?,lease_until=? WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(lease, now() + 300, row.id, now()).run();
+  const claimed = await env.DB.prepare("UPDATE submissions SET status='publishing',lease=?,lease_until=? WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(lease, now2() + 300, row.id, now2()).run();
   requireValue(claimed.meta.changes === 1, "Contribution already processed or being published; retry later", 409);
   try {
     await validateSubmission({ metadata: JSON.parse(row.metadata), profile: row.profile });
@@ -4383,10 +4539,13 @@ async function route(request, env) {
 }
 async function cleanup(env) {
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM sessions WHERE expires<?").bind(now()),
-    env.DB.prepare("DELETE FROM rate_limits WHERE expires<?").bind(now()),
-    env.DB.prepare("DELETE FROM submissions WHERE created<? AND status IN ('approved','rejected')").bind(now() - 30 * 86400),
-    env.DB.prepare("DELETE FROM submissions WHERE created<? AND (status='pending' OR (status='publishing' AND lease_until<unixepoch()))").bind(now() - 30 * 86400)
+    env.DB.prepare("DELETE FROM sessions WHERE expires<?").bind(now2()),
+    env.DB.prepare("DELETE FROM pairings WHERE expires<?").bind(now2()),
+    env.DB.prepare("DELETE FROM devices WHERE expires<?").bind(now2()),
+    env.DB.prepare("DELETE FROM device_sessions WHERE session_hash NOT IN (SELECT hash FROM sessions)").bind(),
+    env.DB.prepare("DELETE FROM rate_limits WHERE expires<?").bind(now2()),
+    env.DB.prepare("DELETE FROM submissions WHERE created<? AND status IN ('approved','rejected')").bind(now2() - 30 * 86400),
+    env.DB.prepare("DELETE FROM submissions WHERE created<? AND (status='pending' OR (status='publishing' AND lease_until<unixepoch()))").bind(now2() - 30 * 86400)
   ]);
 }
 var worker_default = {

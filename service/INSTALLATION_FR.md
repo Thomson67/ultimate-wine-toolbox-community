@@ -4,6 +4,40 @@ Le dépôt des profils est `Thomson67/ultimate-wine-toolbox-community` et le Wor
 est `https://uwt-community-api.roeckel.workers.dev`. Aucun secret n'est présent dans ce dépôt.
 Le service n'est pas opérationnel tant que les étapes ci-dessous ne sont pas terminées.
 
+## Mise à jour depuis la première version (Worker version 1)
+
+Votre clé validateur et les secrets Cloudflare restent valables. Les propositions déjà
+envoyées sont conservées.
+
+1. Dans la console D1 `uwt-community`, réexécuter le **nouveau fichier schema.sql complet**.
+   Il ajoute `pairings`, `devices` et `device_sessions` sans supprimer les tables existantes.
+2. Remplacer le code du Worker par le nouveau `dist/worker.js`, puis **Deploy**.
+3. Vérifier `/health` : `version` doit valoir **2** et `configured` doit rester `true`.
+4. Installer la version de test mise à jour de la Toolbox.
+5. Ouvrir **Espace validateur** sur Batocera : une adresse et un code comme `K7MP-4RXN` apparaissent.
+6. Sur votre PC ou téléphone, ouvrir <https://uwt-community-api.roeckel.workers.dev/pair>.
+7. Coller la **clé validateur** dans la page et se connecter. Elle n'est plus saisie sur Batocera.
+8. Saisir le code affiché sur Batocera, cliquer sur **Vérifier le code**, puis vérifier le nom de l'appareil.
+9. Cocher si souhaité **Autoriser cet appareil pendant 30 jours**, puis confirmer l'autorisation.
+10. La Toolbox ouvre automatiquement l'espace validateur. Pour interrompre l'appairage,
+    cliquer **Annuler** sur Batocera. Le code expire après cinq minutes.
+
+Les appareils mémorisés apparaissent en bas de la page PC. **Révoquer** bloque leurs
+sessions ouvertes et leurs connexions futures. La Toolbox possède aussi une option
+**Oublier l'accès validateur de ce Batocera**. Une erreur réseau lors de l'oubli local
+peut nécessiter une révocation complémentaire sur la page PC.
+
+Sans mémorisation, l'accès dure 30 minutes au maximum et se termine à la sortie du menu.
+Avec mémorisation, un jeton propre à cet appareil est conservé localement avec des droits
+0600 ; il permet d'ouvrir des sessions de 30 minutes pendant une durée fixe de 30 jours.
+La clé principale n'est jamais stockée sur Batocera. Un appareil appairé ne peut pas en
+autoriser d'autres ni accéder à la gestion des appareils.
+
+La page PC utilise une session en mémoire : fermer/recharger la page demande de se
+reconnecter. Elle ne sauvegarde pas la clé ni le jeton dans le stockage du navigateur.
+Le code court ne constitue pas un mot de passe et n'accorde pas de droits à lui seul.
+Ce mécanisme d'appairage n'est pas une authentification à deux facteurs.
+
 ## 1. Installer les tables dans D1
 
 Dans Cloudflare → Storage & databases → D1 → `uwt-community` → Console :
@@ -86,7 +120,7 @@ Ouvrir ensuite :
 La réponse attendue contient :
 
 ```json
-{"service":"uwt-community","version":1,"configured":true,"profile_limit":65536}
+{"service":"uwt-community","version":2,"configured":true,"profile_limit":65536}
 ```
 
 `configured: true` confirme la présence de la liaison et des secrets, pas encore la validité
@@ -126,7 +160,7 @@ Depuis la Toolbox :
 1. AntiMicroX → Profils communautaires → Actualiser : les deux exemples doivent apparaître.
 2. Partager un petit profil personnel autorisé, puis confirmer l'envoi public après validation.
 3. Vérifier la réponse `pending`. Le ZIP reste dans `exports/community/`.
-4. Espace validateur : saisir la **CLE VALIDATEUR**, pas ADMIN_KEY_HASH ni le jeton GitHub.
+4. Espace validateur : suivre l’appairage sur la page PC ci-dessus, avec la **CLE VALIDATEUR**.
 5. Lire toutes les informations et les mappages. Accepter et publier.
 6. Actualiser le catalogue : le nouveau profil doit apparaître.
 7. Vérifier sur GitHub le commit contenant simultanément le profil et `catalog.json`.
@@ -154,7 +188,7 @@ le véritable environnement Cloudflare. Les tests locaux ne garantissent pas cet
 - Les réglages clavier ne sont pas exécutés pendant la revue ; l'inspection ne lance pas AntiMicroX.
 
 Pour révoquer les accès validateurs, générer une nouvelle clé, remplacer `ADMIN_KEY_HASH`,
-puis exécuter `DELETE FROM sessions;` dans la console D1. Renouveler `GITHUB_TOKEN` avant
+puis exécuter `DELETE FROM sessions; DELETE FROM device_sessions; DELETE FROM devices; DELETE FROM pairings;` dans la console D1. Renouveler `GITHUB_TOKEN` avant
 son expiration. Ne jamais inclure de secrets dans les journaux transmis pour diagnostic.
 
 ## Développement

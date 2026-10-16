@@ -19,7 +19,9 @@ Profils/Presets communautaires → Partager. Le profil exporté et ses métadonn
 à une file privée, puis rendus publics uniquement après acceptation d'un validateur.
 Le pseudo est déclaré par l'auteur et ne constitue pas une identité vérifiée.
 
-Les validateurs disposent d'une clé secrète et d'une session de 30 minutes. Ils peuvent
+Les validateurs collent leur clé secrète sur la page PC `/pair`, puis autorisent le code
+affiché sur Batocera. Une session dure 30 minutes ; la mémorisation de l'appareil pendant
+30 jours est facultative et révocable depuis cette page. Ils peuvent
 lire les mappages ou le preset, puis accepter ou refuser depuis le menu de chaque outil.
 Une acceptation ajoute le profil et le catalogue dans un même commit GitHub.
 
