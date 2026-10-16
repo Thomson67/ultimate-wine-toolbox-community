@@ -34,6 +34,20 @@
       ],
       "file": "antimicrox/gobliins-6-pad2key-example.amgp",
       "sha256": "bc1fffbaea3d5a9aec18a9af0c3f5d198eece07e60b2970dd0242c3251653d8e"
+    },
+    {
+      "id": "max-payne-acc0b342",
+      "kind": "antimicrox",
+      "game": "Max Payne",
+      "title": "Max Payne",
+      "author": "Thomson",
+      "description": "Profil manette pour Max Payne 1",
+      "notes": "",
+      "tested_on": "Batocera v43.1",
+      "hotkey": "Guide Xbox / PS",
+      "requirements": [],
+      "file": "antimicrox/max-payne-acc0b342.amgp",
+      "sha256": "e5d3aca8d299c1b270980a00f25da138742fe071e6d42d355f6c6f7a28d93176"
     }
   ]
 }
