@@ -62,6 +62,20 @@
       "requirements": [],
       "file": "reshade/lighthouse-97d77987.ini",
       "sha256": "9a272cd9e17f0ab738a7148faa3e7eb4fa82deeea6864182909607cb26020936"
+    },
+    {
+      "id": "assassins-creed-1-b9e57168",
+      "kind": "reshade",
+      "game": "Assassins Creed 1",
+      "title": "Assassins Creed 1",
+      "author": "Thomson",
+      "description": "Sharp & lightning preset",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "reshade/assassins-creed-1-b9e57168.ini",
+      "sha256": "9770113e2b55f9f03bcc0035bd7285e6a585f2016b281c37891e754b55c5d8c7"
     }
   ]
 }
