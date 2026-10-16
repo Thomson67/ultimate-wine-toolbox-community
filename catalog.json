@@ -42,6 +42,20 @@
       "requirements": [],
       "file": "reshade/reblue-bd7d41d0.ini",
       "sha256": "bca9454c7c5570a6754964990c97450d205f6e092c161f35ef31b21513146d81"
+    },
+    {
+      "id": "assassin-s-creed-2-83393cd0",
+      "kind": "reshade",
+      "game": "Assassins Creed 2",
+      "title": "Assassin's Creed 2",
+      "author": "Thomson",
+      "description": "Sharp & color retouch",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "reshade/assassin-s-creed-2-83393cd0.ini",
+      "sha256": "753679acc316a595225ae605d7ba38359d089c18e0905b1b3c7d0f3bb75c72cc"
     }
   ]
 }
