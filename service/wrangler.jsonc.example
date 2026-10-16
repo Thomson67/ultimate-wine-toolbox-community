@@ -1,0 +1,8 @@
+{
+  "name": "uwt-community-api",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-16",
+  "workers_dev": true,
+  "d1_databases": [{"binding": "DB", "database_name": "uwt-community", "database_id": "REPLACE_WITH_YOUR_DATABASE_ID"}],
+  "triggers": {"crons": ["17 3 * * *"]}
+}
