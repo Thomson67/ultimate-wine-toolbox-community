@@ -56,6 +56,20 @@
       "requirements": [],
       "file": "reshade/assassin-s-creed-2-83393cd0.ini",
       "sha256": "753679acc316a595225ae605d7ba38359d089c18e0905b1b3c7d0f3bb75c72cc"
+    },
+    {
+      "id": "call-of-juarez-ff6f4b61",
+      "kind": "antimicrox",
+      "game": "Call of Juarez",
+      "title": "Call of Juarez",
+      "author": "Thomsonito",
+      "description": "Prise en charge complète manette",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "antimicrox/call-of-juarez-ff6f4b61.amgp",
+      "sha256": "879d0b9905f5a133c27b95496d6c99ce48960d353e08c7ae9d716bfc0c812c2a"
     }
   ]
 }
