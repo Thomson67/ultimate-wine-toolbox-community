@@ -72,20 +72,6 @@
       "sha256": "879d0b9905f5a133c27b95496d6c99ce48960d353e08c7ae9d716bfc0c812c2a"
     },
     {
-      "id": "god-of-war-iii-remastered-035bb10b",
-      "kind": "antimicrox",
-      "game": "God of War III Remastered[Hidraw]",
-      "title": "God of War III Remastered",
-      "author": "Thomson",
-      "description": "Profil manette pour gérer le launcher",
-      "notes": "",
-      "tested_on": "",
-      "hotkey": "",
-      "requirements": [],
-      "file": "antimicrox/god-of-war-iii-remastered-035bb10b.amgp",
-      "sha256": "577f3cf1f756b2b9ef822dbef88b48ebd0c169f7e666e5d74f6c798842e571ae"
-    },
-    {
       "id": "bloodborne-e04036a1",
       "kind": "antimicrox",
       "game": "Bloodborne",
