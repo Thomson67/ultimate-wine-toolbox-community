@@ -86,20 +86,6 @@
       "sha256": "577f3cf1f756b2b9ef822dbef88b48ebd0c169f7e666e5d74f6c798842e571ae"
     },
     {
-      "id": "bloodborne-bc951249",
-      "kind": "antimicrox",
-      "game": "Bloodborne",
-      "title": "Bloodborne",
-      "author": "Thomson",
-      "description": "Profil manette pour gérer le launcher",
-      "notes": "",
-      "tested_on": "",
-      "hotkey": "",
-      "requirements": [],
-      "file": "antimicrox/bloodborne-bc951249.amgp",
-      "sha256": "09a797cae7c05b5d21134b21f336b5e19985e96b46587249fb259be9c6ba3c45"
-    },
-    {
       "id": "bloodborne-e04036a1",
       "kind": "antimicrox",
       "game": "Bloodborne",
