@@ -98,6 +98,22 @@
       "requirements": [],
       "file": "antimicrox/bloodborne-bc951249.amgp",
       "sha256": "09a797cae7c05b5d21134b21f336b5e19985e96b46587249fb259be9c6ba3c45"
+    },
+    {
+      "id": "bloodborne-e04036a1",
+      "kind": "antimicrox",
+      "game": "Bloodborne",
+      "title": "Bloodborne",
+      "author": "Thomson",
+      "description": "Gestion manette du launcher",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [
+        "UWT launcher-package-v1"
+      ],
+      "file": "antimicrox/bloodborne-e04036a1.amgp",
+      "sha256": "29249a10ddc93def21854909d6de89f95e6befa96183a8e89a959ff496b20da9"
     }
   ]
 }
