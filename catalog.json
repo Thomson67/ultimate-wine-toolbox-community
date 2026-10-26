@@ -102,6 +102,22 @@
       ],
       "file": "antimicrox/god-of-war-iii-remastered-17d7ee30.amgp",
       "sha256": "14ff2403620e5e523e1aa39b9e6c295b53c1a7c872ba1ac2195aa038adb80e10"
+    },
+    {
+      "id": "beyond-good-evil-34df5dfb",
+      "kind": "antimicrox",
+      "game": "Beyond Good & Evil",
+      "title": "Beyond Good & Evil",
+      "author": "Thomson",
+      "description": "Gestion complète de la manette en jeu",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [
+        "UWT launcher-package-v1"
+      ],
+      "file": "antimicrox/beyond-good-evil-34df5dfb.amgp",
+      "sha256": "cbe8504679064924ac4cafb57e7a81bff1baffdb4bd7551eb96cd906b0d82712"
     }
   ]
 }
