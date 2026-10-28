@@ -118,6 +118,20 @@
       ],
       "file": "antimicrox/beyond-good-evil-34df5dfb.amgp",
       "sha256": "cbe8504679064924ac4cafb57e7a81bff1baffdb4bd7551eb96cd906b0d82712"
+    },
+    {
+      "id": "the-legend-of-zelda-ocarina-of-time-3d-f4ede4eb",
+      "kind": "reshade",
+      "game": "The Legend of Zelda - Ocarina of Time 3D",
+      "title": "The Legend of Zelda - Ocarina of Time 3D",
+      "author": "Thomson",
+      "description": "Color correction sharp and light",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "reshade/the-legend-of-zelda-ocarina-of-time-3d-f4ede4eb.ini",
+      "sha256": "868d2bac464f73c500d3091777044e42558508b8fc08e6aed8ce32c3a8a4f8a5"
     }
   ]
 }
