@@ -1,3 +1,4 @@
+import {packsRoute, ZIP_LIMIT, PackError, cleanupPacks} from './packs.js';
 import {pairingPage, pairingRoute} from './pairing.js';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
@@ -22,7 +23,7 @@ function reason(error) {
 function classified(error, stage) {
   if(error instanceof Failure && error.stage) return error;
   const failure=new Failure(Number.isInteger(error?.status)&&error.status>=400&&error.status<=599?error.status:503,
-    error instanceof Failure?error.message:`Publication/service failure: ${reason(error)}`);
+    (error instanceof Failure || error instanceof PackError)?error.message:`Publication/service failure: ${reason(error)}`);
   failure.stage=stage; failure.code=error instanceof Failure?'REQUEST_FAILED':reason(error);
   failure.ref=crypto.randomUUID().slice(0,8);
   failure.message=`${failure.message} [${stage}; ref ${failure.ref}]`;
@@ -224,7 +225,7 @@ export async function removePublished(env,kind,id,expected,api=github) {
 }
 async function route(request,env) {
   const url=new URL(request.url), path=url.pathname;
-  if(request.method==='GET' && (path==='/'||path==='/health')) return response({service:'uwt-community',version:2,revision:'published-removal-1',capabilities:['published-removal'],configured:!!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||'')),profile_limit:PROFILE_LIMIT});
+  if(request.method==='GET' && (path==='/'||path==='/health')) return response({service:'uwt-community',version:2,revision:'reshade-packs-1',capabilities:['published-removal',...(env.PACKS?['reshade-packs']:[])],pack_limit:ZIP_LIMIT,configured:!!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||'')),profile_limit:PROFILE_LIMIT});
   requireValue(env.DB && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH||''),'Service is not configured',503);
   if(request.method==='GET' && path==='/pair') return pairingPage();
   const paired=await pairingRoute(request,env,{body,rate,ipKey,sha256,requireValue,response,authorized,text});
@@ -254,6 +255,8 @@ async function route(request,env) {
     requireValue(r.meta.changes===1,'Review queue is full; try later',503);
     return response({id:m.id,status:'pending'},201);
   }
+  const packResponse=await packsRoute(request,env,{response,authorized,rate,ipKey,body});
+  if(packResponse)return packResponse;
   const token=await authorized(request,env);
   if(path==='/v1/logout' && request.method==='POST') {
     await env.DB.prepare('DELETE FROM sessions WHERE hash=?').bind(await sha256(token)).run(); return response({ok:true});
@@ -312,6 +315,7 @@ async function route(request,env) {
   }
 }
 export async function cleanup(env) {
+  await cleanupPacks(env);
   await env.DB.batch([
     env.DB.prepare('DELETE FROM sessions WHERE expires<?').bind(now()),
     env.DB.prepare('DELETE FROM pairings WHERE expires<?').bind(now()),

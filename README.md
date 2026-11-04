@@ -41,3 +41,11 @@ sont refusés. Des affectations clavier restent puissantes : la revue humaine es
 - Une nouvelle proposition crée une nouvelle entrée ; pas de remplacement automatique d'un profil publié.
 - Les contrôles automatiques ne remplacent pas un essai en jeu par le validateur.
 - Déploiement et vérification du temps CPU sur Cloudflare Free nécessaires avant ouverture publique.
+
+## ReShade ZIP bundles
+
+The service supports moderated binary pack sharing through `/v1/packs`,
+using private R2 storage and a separate D1 catalogue. Enable the PACKS binding,
+apply schema.sql and deploy the rebuilt Worker before using this feature.
+See [Cloudflare upgrade instructions](service/INSTALLATION_FR.md).
+Legacy INI/AntiMicroX contributions keep their existing Git catalogue.

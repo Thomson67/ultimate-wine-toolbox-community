@@ -1,3 +1,55 @@
+# Activer le partage direct des packs ReShade ZIP
+
+Cette mise à jour ajoute la réception, la modération, la recherche et le
+téléchargement des packs. Publier ces sources sur GitHub ne déploie pas le
+Worker : effectuer les trois étapes ci-dessous dans Cloudflare. Les profils
+INI/AntiMicroX et les clés/sessions existantes restent inchangés.
+
+1. **D1 → uwt-community → Console** : exécuter le fichier
+   [schema.sql complet](https://raw.githubusercontent.com/Thomson67/ultimate-wine-toolbox-community/main/service/schema.sql).
+   Il ajoute la table `pack_submissions` sans supprimer les données existantes.
+2. **R2** : créer un bucket privé, par exemple `uwt-community-packs`.
+   Garder l’accès public désactivé (ni r2.dev ni domaine public). Dans
+   **Workers & Pages → uwt-community-api → Bindings → Add → R2 bucket**,
+   choisir ce bucket et nommer la variable **PACKS**. Conserver DB et les secrets.
+3. Remplacer le code du Worker par le nouveau
+   [dist/worker.js prêt à déployer](https://raw.githubusercontent.com/Thomson67/ultimate-wine-toolbox-community/main/service/dist/worker.js),
+   puis **Deploy**. Il est déjà compilé : ne pas coller src/worker.js seul.
+
+Vérifier ensuite `/health` : `revision` = `reshade-packs-1`, `configured` =
+`true`, et `capabilities` contient `reshade-packs`. Vérifier aussi
+`/v1/packs` : il doit répondre avec `schema: 1` et une liste `entries`
+initialement vide. Cela vérifie la présence de la table D1.
+
+Installer UWT **0.11.1-dev8 ou ultérieure**, puis utiliser **ReShade → Partage
+communautaire → Partager un pack ReShade (ZIP)**. Il devient visible dans
+**Rechercher / installer un pack communautaire** seulement après approbation
+par **Valider les partages → Examiner les packs ReShade ZIP**. L’appairage
+modérateur existant est réutilisé. Un modérateur peut retirer les packs publiés.
+
+Les ZIP sont stockés dans R2 privé, avec un catalogue séparé dans D1. Le
+Worker ne sert publiquement que les objets associés à un partage approuvé.
+Les anciens clients INI n’ont aucun nouveau type à charger dans leur catalogue
+Git. Aucun jeton R2/GitHub n’est transmis aux clients.
+
+Limites par pack : 16 Mio compressés, 64 Mio décompressés, 4096 fichiers,
+32 Mio par fichier et 200 presets. Le service vérifie le manifeste, SHA-256,
+CRC, chemins et taille réelle à la décompression, types autorisés et en-têtes
+PE/architecture des add-ons, sans exécuter leur code. Une approbation ne prouve
+pas la compilation des shaders en jeu. Le ZIP ne contient pas l’injecteur ReShade.
+
+Anti-abus : cinq envois par IP/jour, trente globalement/jour, cinquante packs
+en attente. Les retries identiques ne créent pas de nouvelles propositions.
+Le cron existant retire les propositions non approuvées âgées de plus de
+trente jours et leurs objets. Les packs approuvés restent disponibles jusqu’au
+retrait par un modérateur. Les téléchargements de fichiers binaires sont
+vérifiés à nouveau par SHA-256 côté Toolbox avant utilisation.
+
+La suite locale couvre SQLite réel et un stockage R2 simulé. Le déploiement
+Cloudflare et un aller-retour réel entre deux Batocera restent à valider.
+
+---
+
 # Déployer le service communautaire sur Cloudflare Free
 
 Le dépôt des profils est `Thomson67/ultimate-wine-toolbox-community` et le Worker préparé

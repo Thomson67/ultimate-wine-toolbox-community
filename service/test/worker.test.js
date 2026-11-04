@@ -311,3 +311,56 @@ test('published moderation requires authentication and handles real GitHub 404 p
   assert.equal((await call(env,path+'/remove',{method:'POST',token,data:{expected_hash:reviewed.body.review_hash}})).body.status,'removed');
  }finally{globalThis.fetch=saved;}
 });
+
+async function packFixture(changes={}) {
+ const {zipSync,strToU8}=await import('fflate'),{digest}=await import('../src/packs.js');
+ const files={'ReShade.ini':strToU8('[GENERAL]\nPresetPath=./Preset.ini\n'), 'Preset.ini':strToU8('Techniques=Used@Used.fx\n[Used.fx]\nAmount=0.5\n'),'reshade-shaders/Shaders/Used.fx':strToU8('technique Used {}'),...(changes.files||{})};
+ const m={schema:1,kind:'uwt-reshade-pack',game:'Any game',title:'Custom',author:'Tester',credits:'Own shader MIT',description:'',tested_on:'',release:'6.3.3-addons',arch:64,api:'dxgi',presets:{'Preset.ini':'Preset'},addons:{},files:{}};
+ for(const [n,d] of Object.entries(files))m.files[n]=await digest(d);Object.assign(m,changes.manifest||{});
+ files['uwt-pack.json']=strToU8(JSON.stringify(m));files['README.txt']=strToU8('Portable pack');return zipSync(files);
+}
+async function packSetup(){const x=await setup(),objects=new Map();x.env.PACKS={async put(k,v){objects.set(k,Uint8Array.from(v))},async get(k){const v=objects.get(k);return v?{size:v.length,body:new Response(v).body,async arrayBuffer(){return Uint8Array.from(v).buffer}}:null},async delete(k){objects.delete(k)}};return {...x,objects}}
+async function upload(env,bytes){return worker.fetch(new Request('https://e/v1/packs/submissions',{method:'POST',headers:{'Content-Type':'application/zip','CF-Connecting-IP':'192.0.2.1'},body:bytes}),env)}
+test('binary pack validation rejects unexpected payload, traversal, bad manifest and executable add-on mismatch',async()=>{
+ const {validatePack}=await import('../src/packs.js'),m=await validatePack(await packFixture());assert.equal(m.id,'pack-'+m.sha256);
+ for(const bad of [{manifest:{files:{}}},{files:{'../escape.fx':new Uint8Array([1])}},{files:{'extra.dll':new Uint8Array([1])}},{files:{'Preset.ini':new TextEncoder().encode('Techniques=X\nPresetPath=C:\\private\n')}},{manifest:{presets:{'missing.ini':'Missing'}}},{files:{'bad.addon64':new Uint8Array([1])},manifest:{addons:{'bad.addon64':64}}}])await assert.rejects(validatePack(await packFixture(bad)));
+ await assert.rejects(validatePack(new Uint8Array(30)));
+});
+test('pack approval, authenticated review, public download and removal preserve the legacy catalogue',async()=>{
+ const {env,key,sql}=await packSetup(),bytes=await packFixture(),r=await upload(env,bytes);assert.equal(r.status,201);const {id}=await r.json();
+ assert.deepEqual((await call(env,'/v1/packs')).body.entries,[]);assert.equal((await call(env,'/v1/packs/pending')).status,401);
+ assert.equal((await worker.fetch(new Request('https://e/v1/packs/'+id+'/download'),env)).status,404);
+ const token=await login(env,key);assert.equal((await call(env,'/v1/packs/pending',{token})).body.entries.length,1);
+ assert.equal((await call(env,'/v1/packs/'+id+'/approve',{method:'POST',data:{sha256:'0'.repeat(64)},token})).status,409);
+ for(let n=0;n<2;n++)assert.equal((await call(env,'/v1/packs/'+id+'/approve',{method:'POST',data:{sha256:id.slice(5)},token})).body.status,'approved');
+ assert.equal((await call(env,'/v1/packs')).body.entries[0].id,id);assert.equal((await call(env,'/v1/packs/'+id)).body.metadata.credits,'Own shader MIT');
+ const download=await worker.fetch(new Request('https://e/v1/packs/'+id+'/download'),env);assert.equal(download.status,200);assert.deepEqual(new Uint8Array(await download.arrayBuffer()),bytes);
+ assert.equal((await call(env,'/v1/packs/'+id+'/remove',{method:'POST',data:{sha256:id.slice(5)},token})).body.status,'rejected');
+ assert.equal((await worker.fetch(new Request('https://e/v1/packs/'+id+'/download'),env)).status,404);assert.equal(sql.prepare('SELECT count(*) n FROM submissions').get().n,0);
+});
+test('identical pack retry, rejection and expiry clean up immutable private storage',async()=>{
+ const {env,key,sql,objects}=await packSetup(),bytes=await packFixture(),a=await (await upload(env,bytes)).json(),b=await (await upload(env,bytes)).json();assert.deepEqual(a,b);assert.equal(objects.size,1);
+ const token=await login(env,key);await call(env,'/v1/packs/'+a.id+'/reject',{method:'POST',data:{sha256:a.id.slice(5)},token});assert.equal((await (await upload(env,bytes)).json()).status,'rejected');
+ sql.prepare('UPDATE pack_submissions SET created=0').run();await cleanup(env);assert.equal(objects.size,0);
+});
+test('tampered pack cannot be approved; storage disabled does not block text submissions',async()=>{
+ const {env,key,objects}=await packSetup(),bytes=await packFixture(),{id}=await (await upload(env,bytes)).json(),token=await login(env,key);
+ objects.set('packs/'+id.slice(5)+'.zip',await packFixture({manifest:{title:'Changed'}}));
+ assert.equal((await call(env,'/v1/packs/'+id+'/approve',{method:'POST',data:{sha256:id.slice(5)},token})).status,409);
+ delete env.PACKS;assert.equal((await call(env,'/v1/packs')).status,503);assert.equal((await call(env,'/v1/submissions',{method:'POST',data:await payload()})).status,201);
+});
+test('streaming upload enforces compressed size before ZIP parsing',async()=>{const {env}=await packSetup();assert.equal((await upload(env,new Uint8Array(16*1024*1024+1))).status,413)});
+test('ZIP declared sizes, real expansion and CRC are independently bounded',async()=>{
+ const {validatePack}=await import('../src/packs.js'),original=await packFixture();
+ let offset=-1;const view=new DataView(original.buffer,original.byteOffset,original.length);for(let i=0;i<original.length-46;i++)if(view.getUint32(i,true)===0x02014b50){offset=i;break}assert.ok(offset>0);
+ for(const [field,value] of [[24,33*1024*1024],[24,1],[16,123456]]){const bytes=Uint8Array.from(original);new DataView(bytes.buffer).setUint32(offset+field,value,true);await assert.rejects(validatePack(bytes))}
+});
+test('an interrupted R2 upload is retryable without losing the queue identity',async()=>{
+ const {env,objects,sql}=await packSetup(),bytes=await packFixture(),put=env.PACKS.put;env.PACKS.put=async()=>{throw Error('storage unavailable')};assert.equal((await upload(env,bytes)).status,503);
+ assert.equal(sql.prepare('SELECT count(*) n FROM pack_submissions').get().n,1);env.PACKS.put=put;assert.equal((await (await upload(env,bytes)).json()).status,'pending');assert.equal(objects.size,1);
+});
+test('add-on PE architecture is inspected without execution; shader URLs stay valid',async()=>{
+ const {validatePack}=await import('../src/packs.js'),pe=new Uint8Array(256),v=new DataView(pe.buffer);pe[0]=77;pe[1]=90;v.setUint32(60,128,true);v.setUint32(128,0x4550,true);v.setUint16(132,0x8664,true);
+ const options={files:{'custom.addon64':pe,'reshade-shaders/Shaders/Used.fx':new TextEncoder().encode('// https://example.org/shader\ntechnique Used {}')},manifest:{addons:{'custom.addon64':64}}};
+ assert.deepEqual((await validatePack(await packFixture(options))).addons,['custom.addon64']);v.setUint16(132,0x14c,true);await assert.rejects(validatePack(await packFixture(options)));
+});

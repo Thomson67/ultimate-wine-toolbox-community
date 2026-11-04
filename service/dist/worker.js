@@ -1,3 +1,662 @@
+// node_modules/fflate/esm/browser.js
+var u8 = Uint8Array;
+var u16 = Uint16Array;
+var i32 = Int32Array;
+var fleb = new u8([
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  1,
+  1,
+  1,
+  1,
+  2,
+  2,
+  2,
+  2,
+  3,
+  3,
+  3,
+  3,
+  4,
+  4,
+  4,
+  4,
+  5,
+  5,
+  5,
+  5,
+  0,
+  /* unused */
+  0,
+  0,
+  /* impossible */
+  0
+]);
+var fdeb = new u8([
+  0,
+  0,
+  0,
+  0,
+  1,
+  1,
+  2,
+  2,
+  3,
+  3,
+  4,
+  4,
+  5,
+  5,
+  6,
+  6,
+  7,
+  7,
+  8,
+  8,
+  9,
+  9,
+  10,
+  10,
+  11,
+  11,
+  12,
+  12,
+  13,
+  13,
+  /* unused */
+  0,
+  0
+]);
+var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
+var freb = function(eb, start) {
+  var b = new u16(31);
+  for (var i = 0; i < 31; ++i) {
+    b[i] = start += 1 << eb[i - 1];
+  }
+  var r = new i32(b[30]);
+  for (var i = 1; i < 30; ++i) {
+    for (var j = b[i]; j < b[i + 1]; ++j) {
+      r[j] = j - b[i] << 5 | i;
+    }
+  }
+  return { b, r };
+};
+var _a = freb(fleb, 2);
+var fl = _a.b;
+var revfl = _a.r;
+fl[28] = 258, revfl[258] = 28;
+var _b = freb(fdeb, 0);
+var fd = _b.b;
+var revfd = _b.r;
+var rev = new u16(32768);
+for (i = 0; i < 32768; ++i) {
+  x = (i & 43690) >> 1 | (i & 21845) << 1;
+  x = (x & 52428) >> 2 | (x & 13107) << 2;
+  x = (x & 61680) >> 4 | (x & 3855) << 4;
+  rev[i] = ((x & 65280) >> 8 | (x & 255) << 8) >> 1;
+}
+var x;
+var i;
+var hMap = (function(cd, mb, r) {
+  var s = cd.length;
+  var i = 0;
+  var l = new u16(mb);
+  for (; i < s; ++i) {
+    if (cd[i])
+      ++l[cd[i] - 1];
+  }
+  var le = new u16(mb);
+  for (i = 1; i < mb; ++i) {
+    le[i] = le[i - 1] + l[i - 1] << 1;
+  }
+  var co;
+  if (r) {
+    co = new u16(1 << mb);
+    var rvb = 15 - mb;
+    for (i = 0; i < s; ++i) {
+      if (cd[i]) {
+        var sv = i << 4 | cd[i];
+        var r_1 = mb - cd[i];
+        var v = le[cd[i] - 1]++ << r_1;
+        for (var m = v | (1 << r_1) - 1; v <= m; ++v) {
+          co[rev[v] >> rvb] = sv;
+        }
+      }
+    }
+  } else {
+    co = new u16(s);
+    for (i = 0; i < s; ++i) {
+      if (cd[i]) {
+        co[i] = rev[le[cd[i] - 1]++] >> 15 - cd[i];
+      }
+    }
+  }
+  return co;
+});
+var flt = new u8(288);
+for (i = 0; i < 144; ++i)
+  flt[i] = 8;
+var i;
+for (i = 144; i < 256; ++i)
+  flt[i] = 9;
+var i;
+for (i = 256; i < 280; ++i)
+  flt[i] = 7;
+var i;
+for (i = 280; i < 288; ++i)
+  flt[i] = 8;
+var i;
+var fdt = new u8(32);
+for (i = 0; i < 32; ++i)
+  fdt[i] = 5;
+var i;
+var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
+var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
+var max = function(a) {
+  var m = a[0];
+  for (var i = 1; i < a.length; ++i) {
+    if (a[i] > m)
+      m = a[i];
+  }
+  return m;
+};
+var bits = function(d, p, m) {
+  var o = p / 8 | 0;
+  return (d[o] | d[o + 1] << 8) >> (p & 7) & m;
+};
+var bits16 = function(d, p) {
+  var o = p / 8 | 0;
+  return (d[o] | d[o + 1] << 8 | d[o + 2] << 16) >> (p & 7);
+};
+var shft = function(p) {
+  return (p + 7) / 8 | 0;
+};
+var slc = function(v, s, e) {
+  if (s == null || s < 0)
+    s = 0;
+  if (e == null || e > v.length)
+    e = v.length;
+  return new u8(v.subarray(s, e));
+};
+var ec = [
+  "unexpected EOF",
+  "invalid block type",
+  "invalid length/literal",
+  "invalid distance",
+  "stream finished",
+  "no stream handler",
+  ,
+  "no callback",
+  "invalid UTF-8 data",
+  "extra field too long",
+  "date not in range 1980-2099",
+  "filename too long",
+  "stream finishing",
+  "invalid zip data"
+  // determined by unknown compression method
+];
+var err = function(ind, msg, nt) {
+  var e = new Error(msg || ec[ind]);
+  e.code = ind;
+  if (Error.captureStackTrace)
+    Error.captureStackTrace(e, err);
+  if (!nt)
+    throw e;
+  return e;
+};
+var inflt = function(dat, st, buf, dict) {
+  var sl = dat.length, dl = dict ? dict.length : 0;
+  if (!sl || st.f && !st.l)
+    return buf || new u8(0);
+  var noBuf = !buf;
+  var resize = noBuf || st.i != 2;
+  var noSt = st.i;
+  if (noBuf)
+    buf = new u8(sl * 3);
+  var cbuf = function(l2) {
+    var bl = buf.length;
+    if (l2 > bl) {
+      var nbuf = new u8(Math.max(bl * 2, l2));
+      nbuf.set(buf);
+      buf = nbuf;
+    }
+  };
+  var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
+  var tbts = sl * 8;
+  do {
+    if (!lm) {
+      final = bits(dat, pos, 1);
+      var type = bits(dat, pos + 1, 3);
+      pos += 3;
+      if (!type) {
+        var s = shft(pos) + 4, l = dat[s - 4] | dat[s - 3] << 8, t = s + l;
+        if (t > sl) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (resize)
+          cbuf(bt + l);
+        buf.set(dat.subarray(s, t), bt);
+        st.b = bt += l, st.p = pos = t * 8, st.f = final;
+        continue;
+      } else if (type == 1)
+        lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
+      else if (type == 2) {
+        var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
+        var tl = hLit + bits(dat, pos + 5, 31) + 1;
+        pos += 14;
+        var ldt = new u8(tl);
+        var clt = new u8(19);
+        for (var i = 0; i < hcLen; ++i) {
+          clt[clim[i]] = bits(dat, pos + i * 3, 7);
+        }
+        pos += hcLen * 3;
+        var clb = max(clt), clbmsk = (1 << clb) - 1;
+        var clm = hMap(clt, clb, 1);
+        for (var i = 0; i < tl; ) {
+          var r = clm[bits(dat, pos, clbmsk)];
+          pos += r & 15;
+          var s = r >> 4;
+          if (s < 16) {
+            ldt[i++] = s;
+          } else {
+            var c = 0, n = 0;
+            if (s == 16)
+              n = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
+            else if (s == 17)
+              n = 3 + bits(dat, pos, 7), pos += 3;
+            else if (s == 18)
+              n = 11 + bits(dat, pos, 127), pos += 7;
+            while (n--)
+              ldt[i++] = c;
+          }
+        }
+        var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
+        lbt = max(lt);
+        dbt = max(dt);
+        lm = hMap(lt, lbt, 1);
+        dm = hMap(dt, dbt, 1);
+      } else
+        err(1);
+      if (pos > tbts) {
+        if (noSt)
+          err(0);
+        break;
+      }
+    }
+    if (resize)
+      cbuf(bt + 131072);
+    var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
+    var lpos = pos;
+    for (; ; lpos = pos) {
+      var c = lm[bits16(dat, pos) & lms], sym = c >> 4;
+      pos += c & 15;
+      if (pos > tbts) {
+        if (noSt)
+          err(0);
+        break;
+      }
+      if (!c)
+        err(2);
+      if (sym < 256)
+        buf[bt++] = sym;
+      else if (sym == 256) {
+        lpos = pos, lm = null;
+        break;
+      } else {
+        var add = sym - 254;
+        if (sym > 264) {
+          var i = sym - 257, b = fleb[i];
+          add = bits(dat, pos, (1 << b) - 1) + fl[i];
+          pos += b;
+        }
+        var d = dm[bits16(dat, pos) & dms], dsym = d >> 4;
+        if (!d)
+          err(3);
+        pos += d & 15;
+        var dt = fd[dsym];
+        if (dsym > 3) {
+          var b = fdeb[dsym];
+          dt += bits16(dat, pos) & (1 << b) - 1, pos += b;
+        }
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (resize)
+          cbuf(bt + 131072);
+        var end = bt + add;
+        if (bt < dt) {
+          var shift = dl - dt, dend = Math.min(dt, end);
+          if (shift + bt < 0)
+            err(3);
+          for (; bt < dend; ++bt)
+            buf[bt] = dict[shift + bt];
+        }
+        for (; bt < end; ++bt)
+          buf[bt] = buf[bt - dt];
+      }
+    }
+    st.l = lm, st.p = lpos, st.b = bt, st.f = final;
+    if (lm)
+      final = 1, st.m = lbt, st.d = dm, st.n = dbt;
+  } while (!final);
+  return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
+};
+var et = /* @__PURE__ */ new u8(0);
+var Inflate = /* @__PURE__ */ (function() {
+  function Inflate2(opts, cb) {
+    if (typeof opts == "function")
+      cb = opts, opts = {};
+    this.ondata = cb;
+    var dict = opts && opts.dictionary && opts.dictionary.subarray(-32768);
+    this.s = { i: 0, b: dict ? dict.length : 0 };
+    this.o = new u8(32768);
+    this.p = new u8(0);
+    if (dict)
+      this.o.set(dict);
+  }
+  Inflate2.prototype.e = function(c) {
+    if (!this.ondata)
+      err(5);
+    if (this.d)
+      err(4);
+    if (!this.p.length)
+      this.p = c;
+    else if (c.length) {
+      var n = new u8(this.p.length + c.length);
+      n.set(this.p), n.set(c, this.p.length), this.p = n;
+    }
+  };
+  Inflate2.prototype.c = function(final) {
+    this.s.i = +(this.d = final || false);
+    var bts = this.s.b;
+    var dt = inflt(this.p, this.s, this.o);
+    this.ondata(slc(dt, bts, this.s.b), this.d);
+    this.o = slc(dt, this.s.b - 32768), this.s.b = this.o.length;
+    this.p = slc(this.p, this.s.p / 8 | 0), this.s.p &= 7;
+  };
+  Inflate2.prototype.push = function(chunk, final) {
+    this.e(chunk), this.c(final);
+  };
+  return Inflate2;
+})();
+var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
+var tds = 0;
+try {
+  td.decode(et, { stream: true });
+  tds = 1;
+} catch (e) {
+}
+
+// src/packs.js
+var ZIP_LIMIT = 16 * 1024 * 1024;
+var EXPANDED_LIMIT = 64 * 1024 * 1024;
+var decode = new TextDecoder("utf-8", { fatal: true });
+var encode = new TextEncoder();
+var now = () => Math.floor(Date.now() / 1e3);
+var PackError = class extends Error {
+};
+var ok = (condition, message, status = 400) => {
+  if (!condition) {
+    const e = new PackError(message);
+    e.status = status;
+    throw e;
+  }
+};
+async function digest(bytes) {
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+function path(name) {
+  ok(typeof name === "string" && name.length <= 512 && !/[\\:\x00-\x1f\x7f]/.test(name) && !name.startsWith("/") && name.split("/").every((p) => p && p !== "." && p !== ".." && !/[ .]$/.test(p) && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(p)), "Invalid pack member path");
+  return name;
+}
+var crcTable = Uint32Array.from({ length: 256 }, (_, n) => {
+  for (let k = 0; k < 8; k++) n = n & 1 ? 3988292384 ^ n >>> 1 : n >>> 1;
+  return n >>> 0;
+});
+function crc32(data) {
+  let c = 4294967295;
+  for (const b of data) c = crcTable[(c ^ b) & 255] ^ c >>> 8;
+  return (c ^ 4294967295) >>> 0;
+}
+var ZipMembers = class extends Map {
+  get(name) {
+    return super.get(name)?.();
+  }
+};
+function unpack(bytes) {
+  ok(bytes.length > 22 && bytes.length <= ZIP_LIMIT, "Pack ZIP exceeds 16 MiB", 413);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) if (view.getUint32(i, true) === 101010256 && i + 22 + view.getUint16(i + 20, true) === bytes.length) {
+    end = i;
+    break;
+  }
+  ok(end >= 0, "Invalid ZIP directory");
+  const count = view.getUint16(end + 10, true), start = view.getUint32(end + 16, true);
+  ok(!view.getUint16(end + 4, true) && !view.getUint16(end + 6, true) && view.getUint16(end + 8, true) === count && count > 0 && count <= 4096 && start + view.getUint32(end + 12, true) === end, "Unsupported ZIP directory");
+  const files = new ZipMembers(), seen = /* @__PURE__ */ new Set(), records = [];
+  let pos = start, total = 0;
+  for (let i = 0; i < count; i++) {
+    ok(pos + 46 <= end && view.getUint32(pos, true) === 33639248, "Invalid ZIP record");
+    const flags = view.getUint16(pos + 8, true), method = view.getUint16(pos + 10, true), compressed = view.getUint32(pos + 20, true), size = view.getUint32(pos + 24, true), length = view.getUint16(pos + 28, true), extra = view.getUint16(pos + 30, true), comment = view.getUint16(pos + 32, true), offset = view.getUint32(pos + 42, true);
+    ok(pos + 46 + length + extra + comment <= end && !(flags & 1) && [0, 8].includes(method) && (view.getUint32(pos + 38, true) >>> 16 & 61440) !== 40960, "Encrypted/linked/unsupported ZIP member");
+    const name = path(decode.decode(bytes.subarray(pos + 46, pos + 46 + length)));
+    ok(!seen.has(name.toLowerCase()), "Duplicate pack member");
+    seen.add(name.toLowerCase());
+    total += size;
+    ok(size <= 32 * 1024 * 1024 && total <= EXPANDED_LIMIT, "Expanded pack exceeds 64 MiB", 413);
+    ok(offset + 30 <= start && view.getUint32(offset, true) === 67324752, "Invalid ZIP local record");
+    const localName = view.getUint16(offset + 26, true), localExtra = view.getUint16(offset + 28, true), from = offset + 30 + localName + localExtra;
+    ok(from + compressed <= start && decode.decode(bytes.subarray(offset + 30, offset + 30 + localName)) === name && view.getUint16(offset + 8, true) === method, "Inconsistent ZIP member");
+    records.push({ name, method, compressed, size, from, crc: view.getUint32(pos + 16, true) });
+    pos += 46 + length + extra + comment;
+  }
+  ok(pos === end, "Unexpected ZIP directory data");
+  for (const r of records) {
+    files.set(r.name, () => {
+      const raw = bytes.subarray(r.from, r.from + r.compressed);
+      let data = raw;
+      if (r.method === 8) {
+        data = new Uint8Array(r.size);
+        let written = 0;
+        const inflater = new Inflate((chunk) => {
+          ok(written + chunk.length <= r.size, "ZIP expands beyond declared size", 413);
+          data.set(chunk, written);
+          written += chunk.length;
+        });
+        for (let i = 0; i < raw.length; i += 1024) inflater.push(raw.subarray(i, i + 1024), i + 1024 >= raw.length);
+        ok(written === r.size, "ZIP size mismatch");
+      }
+      ok(data.length === r.size && crc32(data) === r.crc, "ZIP size/CRC mismatch");
+      return data;
+    });
+  }
+  return files;
+}
+function publicText(value, max2 = 4e3, required = false) {
+  ok(typeof value === "string" && value.length <= max2 && !/[\x00-\x1f\x7f]/.test(value) && (!required || value.trim()), "Invalid public pack metadata");
+  return value.trim();
+}
+async function parsePack(bytes) {
+  const files = unpack(bytes);
+  ok(files.has("uwt-pack.json"), "Missing portable pack manifest");
+  ok(files.get("uwt-pack.json").length <= 1024 * 1024, "Manifest too large");
+  const manifest = JSON.parse(decode.decode(files.get("uwt-pack.json")));
+  ok(manifest.schema === 1 && manifest.kind === "uwt-reshade-pack", "Unsupported pack manifest");
+  const metadata = {};
+  for (const key of ["game", "title", "author", "credits", "description", "tested_on"]) metadata[key] = publicText(manifest[key] ?? "", ["game", "title", "author"].includes(key) ? 160 : 4e3, ["game", "title", "author", "credits"].includes(key));
+  ok(manifest.files && typeof manifest.files === "object" && !Array.isArray(manifest.files), "Missing member checksums");
+  const members = Object.keys(manifest.files);
+  ok(members.length > 0 && members.length + 2 === files.size && files.has("README.txt"), "Unexpected pack members");
+  ok(manifest.presets && !Array.isArray(manifest.presets) && Object.keys(manifest.presets).length > 0 && Object.keys(manifest.presets).length <= 200, "Invalid pack presets");
+  ok(manifest.addons && !Array.isArray(manifest.addons), "Invalid add-ons");
+  for (const name of members) {
+    path(name);
+    ok(files.has(name), "Missing member");
+    const data = files.get(name);
+    ok(/^[a-f0-9]{64}$/.test(manifest.files[name]) && await digest(data) === manifest.files[name], "Member checksum mismatch");
+    const preset = Object.hasOwn(manifest.presets, name), addon = Object.hasOwn(manifest.addons, name);
+    ok(name === "ReShade.ini" || preset || addon || /^reshade-shaders\/(Shaders|Textures)\/.+\.(fx|fxh|h|hlsl|png|jpg|jpeg|dds|bmp|tga|gif|txt|md)$/i.test(name), "Unexpected pack payload");
+    if (preset) {
+      ok(/\.ini$/i.test(name), "Invalid preset name");
+      publicText(manifest.presets[name], 512, true);
+      const text2 = decode.decode(data);
+      ok(/^Techniques=/m.test(text2) && !/^[ \t]*(?:EffectSearchPaths|TextureSearchPaths|PresetPath)=/im.test(text2), "Non-portable preset");
+    }
+    if (addon) {
+      ok(/\.addon(?:32|64)?$/.test(name) && [32, 64].includes(manifest.addons[name]) && data.length >= 64 && data[0] === 77 && data[1] === 90, "Invalid add-on");
+      const v = new DataView(data.buffer, data.byteOffset, data.length), p = v.getUint32(60, true);
+      ok(p + 6 <= data.length && v.getUint32(p, true) === 17744 && v.getUint16(p + 4, true) === (manifest.addons[name] === 64 ? 34404 : 332), "Add-on architecture mismatch");
+    }
+    if (preset || name === "ReShade.ini") ok(!/[A-Za-z]:[\\/]|\/userdata\/|\/home\//.test(decode.decode(data)), "Machine-specific path in pack");
+  }
+  ok(members.includes("ReShade.ini") && Object.keys(manifest.presets).every((n) => members.includes(n)) && Object.keys(manifest.addons).every((n) => members.includes(n)), "Missing configured member");
+  metadata.release = publicText(manifest.release ?? "", 160);
+  metadata.api = publicText(manifest.api ?? "", 32);
+  metadata.arch = manifest.arch ?? null;
+  ok([null, 32, 64].includes(metadata.arch), "Invalid pack architecture");
+  metadata.presets = Object.keys(manifest.presets);
+  metadata.addons = Object.keys(manifest.addons);
+  metadata.requires_full_addons = metadata.addons.length > 0;
+  metadata.sha256 = await digest(bytes);
+  metadata.id = "pack-" + metadata.sha256;
+  metadata.kind = "reshade-pack";
+  metadata.bytes = bytes.length;
+  ok(encode.encode(JSON.stringify(metadata)).length <= 32768, "Pack metadata too large");
+  return metadata;
+}
+async function validatePack(bytes) {
+  try {
+    return await parsePack(bytes);
+  } catch (e) {
+    if (e instanceof PackError) throw e;
+    ok(false, "Invalid portable pack ZIP");
+  }
+}
+async function binary(request) {
+  ok((request.headers.get("content-type") || "").split(";")[0] === "application/zip", "Expected ZIP", 415);
+  const reader = request.body?.getReader();
+  ok(reader, "Missing ZIP");
+  let size = 0;
+  const chunks = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > ZIP_LIMIT) {
+        await reader.cancel();
+        ok(false, "Pack ZIP exceeds 16 MiB", 413);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    result.set(c, offset);
+    offset += c.length;
+  }
+  return result;
+}
+async function packsRoute(request, env, h) {
+  const url = new URL(request.url), p = url.pathname;
+  if (!p.startsWith("/v1/packs")) return null;
+  const { response: response2, authorized: authorized2, rate: rate2, ipKey: ipKey2, body: body2 } = h;
+  ok(env.PACKS, "Pack storage is not enabled; configure the PACKS R2 binding", 503);
+  if (p === "/v1/packs" && request.method === "GET") {
+    const rows = await env.DB.prepare("SELECT metadata FROM pack_submissions WHERE status='approved' ORDER BY created DESC LIMIT 1000").bind().all();
+    return response2({ schema: 1, entries: rows.results.map((r) => {
+      const m = JSON.parse(r.metadata);
+      return Object.fromEntries(["id", "kind", "game", "title", "author", "sha256", "bytes", "release", "requires_full_addons"].map((k) => [k, m[k]]));
+    }) });
+  }
+  if (p === "/v1/packs/submissions" && request.method === "POST") {
+    await rate2(env, "pack-submit:" + await ipKey2(request, env), 5, 86400);
+    await rate2(env, "pack-submit-global", 30, 86400);
+    const bytes = await binary(request), m = await validatePack(bytes), metadata = JSON.stringify(m);
+    const existing = await env.DB.prepare("SELECT metadata,status FROM pack_submissions WHERE id=?").bind(m.id).first();
+    if (existing) {
+      ok(existing.metadata === metadata, "Pack identity collision", 409);
+      if (existing.status === "pending") await env.PACKS.put("packs/" + m.sha256 + ".zip", bytes, { httpMetadata: { contentType: "application/zip" } });
+      return response2({ id: m.id, status: existing.status });
+    }
+    const key = "packs/" + m.sha256 + ".zip";
+    const result = await env.DB.prepare("INSERT OR IGNORE INTO pack_submissions(id,metadata,sha256,object_key,created) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM pack_submissions WHERE status='pending')<50").bind(m.id, metadata, m.sha256, key, now()).run();
+    if (result.meta.changes !== 1) {
+      const row2 = await env.DB.prepare("SELECT status FROM pack_submissions WHERE id=?").bind(m.id).first();
+      ok(row2, "Pack review queue full", 503);
+      return response2({ id: m.id, status: row2.status });
+    }
+    await env.PACKS.put(key, bytes, { httpMetadata: { contentType: "application/zip" } });
+    return response2({ id: m.id, status: "pending" }, 201);
+  }
+  const download = p.match(/^\/v1\/packs\/(pack-[a-f0-9]{64})\/download$/);
+  if (download && request.method === "GET") {
+    const row2 = await env.DB.prepare("SELECT object_key FROM pack_submissions WHERE id=? AND status='approved'").bind(download[1]).first();
+    ok(row2, "Pack unavailable", 404);
+    const object = await env.PACKS.get(row2.object_key);
+    ok(object, "Pack file unavailable", 404);
+    return new Response(object.body, { headers: { "Content-Type": "application/zip", "Content-Disposition": 'attachment; filename="' + download[1] + '.zip"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+  }
+  const detail = p.match(/^\/v1\/packs\/(pack-[a-f0-9]{64})$/);
+  if (detail && request.method === "GET") {
+    const row2 = await env.DB.prepare("SELECT metadata FROM pack_submissions WHERE id=? AND status='approved'").bind(detail[1]).first();
+    if (row2) return response2({ metadata: JSON.parse(row2.metadata), status: "approved" });
+  }
+  await authorized2(request, env);
+  if (p === "/v1/packs/pending" && request.method === "GET") {
+    const rows = await env.DB.prepare("SELECT metadata FROM pack_submissions WHERE status='pending' ORDER BY created LIMIT 50").bind().all();
+    return response2({ entries: rows.results.map((r) => JSON.parse(r.metadata)) });
+  }
+  const match = p.match(/^\/v1\/packs\/(pack-[a-f0-9]{64})(?:\/(approve|reject|remove|review-download))?$/);
+  ok(match, "Unknown pack endpoint", 404);
+  const row = await env.DB.prepare("SELECT * FROM pack_submissions WHERE id=?").bind(match[1]).first();
+  ok(row, "Unknown pack", 404);
+  if (!match[2] && request.method === "GET") return response2({ metadata: JSON.parse(row.metadata), status: row.status });
+  if (match[2] === "review-download" && request.method === "GET") {
+    const object = await env.PACKS.get(row.object_key);
+    ok(object, "Pack file unavailable", 404);
+    return new Response(object.body, { headers: { "Content-Type": "application/zip", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+  }
+  ok(request.method === "POST" && ["approve", "reject", "remove"].includes(match[2]), "Unsupported pack action", 405);
+  const value = await body2(request, 1024);
+  ok(value.sha256 === row.sha256, "Review this exact pack first", 409);
+  if (match[2] === "approve") {
+    if (row.status === "approved") return response2({ id: row.id, status: "approved" });
+    ok(row.status === "pending", "Pack already processed", 409);
+    const object = await env.PACKS.get(row.object_key);
+    ok(object, "Pack file unavailable", 409);
+    ok(object.size <= ZIP_LIMIT, "Stored pack too large", 413);
+    const m = await validatePack(new Uint8Array(await object.arrayBuffer()));
+    ok(JSON.stringify(m) === row.metadata, "Stored pack changed", 409);
+  }
+  const target = match[2] === "approve" ? "approved" : "rejected", expected = match[2] === "remove" ? "approved" : "pending";
+  const changed = await env.DB.prepare("UPDATE pack_submissions SET status=? WHERE id=? AND status=?").bind(target, row.id, expected).run();
+  ok(changed.meta.changes === 1 || row.status === target, "Pack state changed; refresh", 409);
+  return response2({ id: row.id, status: target });
+}
+async function cleanupPacks(env) {
+  if (!env.PACKS) return;
+  const rows = await env.DB.prepare("SELECT id,object_key FROM pack_submissions WHERE status!='approved' AND created<? LIMIT 100").bind(now() - 30 * 86400).all();
+  for (const row of rows.results) {
+    const r = await env.DB.prepare("DELETE FROM pack_submissions WHERE id=? AND status!='approved' AND created<?").bind(row.id, now() - 30 * 86400).run();
+    if (r.meta.changes) await env.PACKS.delete(row.object_key);
+  }
+}
+
 // src/pairing-page.js
 var page = `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UWT \u2014 Appairage validateur</title>
@@ -40,7 +699,7 @@ window.addEventListener('pagehide',clearLogin);translate();
 <\/script></main></body></html>`;
 
 // src/pairing.js
-var now = () => Math.floor(Date.now() / 1e3);
+var now2 = () => Math.floor(Date.now() / 1e3);
 var randomToken = () => crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
 var tokenPattern = /^[a-f0-9]{64}$/;
 var alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -57,8 +716,8 @@ function pairingPage() {
 }
 async function pairingRoute(request, env, h) {
   const { body: body2, rate: rate2, ipKey: ipKey2, sha256: sha2562, requireValue: check, response: response2, authorized: authorized2, text: text2 } = h;
-  const path = new URL(request.url).pathname;
-  if (!["/v1/pair/start", "/v1/pair/poll", "/v1/pair/cancel", "/v1/pair/inspect", "/v1/pair/approve", "/v1/device/login", "/v1/device/forget", "/v1/devices", "/v1/devices/revoke"].includes(path)) return null;
+  const path2 = new URL(request.url).pathname;
+  if (!["/v1/pair/start", "/v1/pair/poll", "/v1/pair/cancel", "/v1/pair/inspect", "/v1/pair/approve", "/v1/device/login", "/v1/device/forget", "/v1/devices", "/v1/devices/revoke"].includes(path2)) return null;
   const db = env.DB;
   async function master() {
     const token = await authorized2(request, env);
@@ -78,69 +737,69 @@ async function pairingRoute(request, env, h) {
       db.prepare("DELETE FROM pairings WHERE device_hash=?").bind(hash)
     ]);
   }
-  if (path === "/v1/pair/start" && request.method === "POST") {
+  if (path2 === "/v1/pair/start" && request.method === "POST") {
     await rate2(env, "pair-start:" + await ipKey2(request, env), 5, 3600);
     await rate2(env, "pair-start-global", 100, 3600);
     const v2 = await body2(request, 1024), hash = await secretHash(v2), name = text2(v2.name, 80);
     check(name, "Missing device name");
     const code2 = [...crypto.getRandomValues(new Uint8Array(8))].map((v3) => alphabet[v3 & 31]).join("");
-    const expires2 = now() + 300;
-    const r = await db.prepare("INSERT INTO pairings(device_hash,code,name,expires) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM pairings WHERE expires>?)<100").bind(hash, code2, name, expires2, now()).run();
+    const expires2 = now2() + 300;
+    const r = await db.prepare("INSERT INTO pairings(device_hash,code,name,expires) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM pairings WHERE expires>?)<100").bind(hash, code2, name, expires2, now2()).run();
     check(r.meta.changes === 1, "Too many pending pairings", 429);
     return response2({ code: code2.slice(0, 4) + "-" + code2.slice(4), expires: expires2, interval: 5 });
   }
-  if (["/v1/pair/poll", "/v1/pair/cancel"].includes(path) && request.method === "POST") {
+  if (["/v1/pair/poll", "/v1/pair/cancel"].includes(path2) && request.method === "POST") {
     await rate2(env, "pair-poll:" + await ipKey2(request, env), 300, 600);
     const hash = await secretHash(await body2(request, 1024));
-    const p2 = await db.prepare("SELECT * FROM pairings WHERE device_hash=? AND expires>?").bind(hash, now()).first();
+    const p2 = await db.prepare("SELECT * FROM pairings WHERE device_hash=? AND expires>?").bind(hash, now2()).first();
     check(p2, "Pairing expired or cancelled", 410);
-    if (path.endsWith("/cancel")) {
+    if (path2.endsWith("/cancel")) {
       await revoke(hash);
       return response2({ ok: true });
     }
     return response2({ status: p2.status, remember: p2.remember === 1, expires: p2.access_expires, pair_expires: p2.expires });
   }
-  if (path === "/v1/device/login" && request.method === "POST") {
+  if (path2 === "/v1/device/login" && request.method === "POST") {
     await rate2(env, "device-login:" + await ipKey2(request, env), 60, 900);
     const hash = await secretHash(await body2(request, 1024));
-    const d = await db.prepare("SELECT hash,expires FROM devices WHERE hash=? AND expires>?").bind(hash, now()).first();
+    const d = await db.prepare("SELECT hash,expires FROM devices WHERE hash=? AND expires>?").bind(hash, now2()).first();
     check(d, "Device access expired or revoked", 401);
-    const token = randomToken(), tokenHash = await sha2562(token), expires2 = Math.min(now() + 1800, d.expires);
+    const token = randomToken(), tokenHash = await sha2562(token), expires2 = Math.min(now2() + 1800, d.expires);
     await db.batch([
-      db.prepare("INSERT INTO sessions(hash,expires) SELECT ?,? FROM devices WHERE hash=? AND expires>?").bind(tokenHash, expires2, hash, now()),
+      db.prepare("INSERT INTO sessions(hash,expires) SELECT ?,? FROM devices WHERE hash=? AND expires>?").bind(tokenHash, expires2, hash, now2()),
       db.prepare("INSERT INTO device_sessions(session_hash,device_hash) SELECT hash,? FROM sessions WHERE hash=?").bind(hash, tokenHash)
     ]);
     const created = await db.prepare("SELECT hash FROM sessions WHERE hash=?").bind(tokenHash).first();
     check(created, "Device access revoked", 401);
     return response2({ token, expires: expires2 });
   }
-  if (path === "/v1/device/forget" && request.method === "POST") {
+  if (path2 === "/v1/device/forget" && request.method === "POST") {
     await rate2(env, "device-forget:" + await ipKey2(request, env), 30, 900);
     const hash = await secretHash(await body2(request, 1024));
     await revoke(hash);
     return response2({ ok: true });
   }
   await master();
-  if (path === "/v1/devices" && request.method === "GET") {
-    const rows = await db.prepare("SELECT hash AS id,name,created,expires FROM devices WHERE expires>? ORDER BY created DESC LIMIT 100").bind(now()).all();
+  if (path2 === "/v1/devices" && request.method === "GET") {
+    const rows = await db.prepare("SELECT hash AS id,name,created,expires FROM devices WHERE expires>? ORDER BY created DESC LIMIT 100").bind(now2()).all();
     return response2({ devices: rows.results });
   }
   check(request.method === "POST", "Unsupported method", 405);
   const v = await body2(request, 1024);
-  if (path === "/v1/devices/revoke") {
+  if (path2 === "/v1/devices/revoke") {
     check(tokenPattern.test(v.id || ""), "Invalid device identifier");
     await revoke(v.id);
     return response2({ ok: true });
   }
   const code = codes(v.code);
   check(/^[A-HJ-NP-Z2-9]{8}$/.test(code), "Invalid pairing code");
-  const p = await db.prepare("SELECT * FROM pairings WHERE code=? AND status='pending' AND expires>?").bind(code, now()).first();
+  const p = await db.prepare("SELECT * FROM pairings WHERE code=? AND status='pending' AND expires>?").bind(code, now2()).first();
   check(p, "Pairing code expired, already used or unknown", 410);
-  if (path === "/v1/pair/inspect") return response2({ code: p.code, name: p.name, expires: p.expires });
-  check(path === "/v1/pair/approve" && typeof v.remember === "boolean", "Invalid pairing approval");
-  const expires = now() + (v.remember ? 30 * 86400 : 1800), args = [p.device_hash, now()];
+  if (path2 === "/v1/pair/inspect") return response2({ code: p.code, name: p.name, expires: p.expires });
+  check(path2 === "/v1/pair/approve" && typeof v.remember === "boolean", "Invalid pairing approval");
+  const expires = now2() + (v.remember ? 30 * 86400 : 1800), args = [p.device_hash, now2()];
   const statements = v.remember ? [
-    db.prepare("INSERT INTO devices(hash,name,created,expires) SELECT device_hash,name,?,? FROM pairings WHERE device_hash=? AND status='pending' AND expires>?").bind(now(), expires, ...args)
+    db.prepare("INSERT INTO devices(hash,name,created,expires) SELECT device_hash,name,?,? FROM pairings WHERE device_hash=? AND status='pending' AND expires>?").bind(now2(), expires, ...args)
   ] : [
     db.prepare("INSERT INTO sessions(hash,expires) SELECT device_hash,? FROM pairings WHERE device_hash=? AND status='pending' AND expires>?").bind(expires, ...args),
     db.prepare("INSERT INTO device_sessions(session_hash,device_hash) SELECT device_hash,'' FROM pairings WHERE device_hash=? AND status='pending' AND expires>?").bind(...args)
@@ -2272,16 +2931,16 @@ var MatcherView = class {
    * @returns {string|undefined}
    */
   getCurrentTag() {
-    const path = this._matcher.path;
-    return path.length > 0 ? path[path.length - 1].tag : void 0;
+    const path2 = this._matcher.path;
+    return path2.length > 0 ? path2[path2.length - 1].tag : void 0;
   }
   /**
    * Get current namespace.
    * @returns {string|undefined}
    */
   getCurrentNamespace() {
-    const path = this._matcher.path;
-    return path.length > 0 ? path[path.length - 1].namespace : void 0;
+    const path2 = this._matcher.path;
+    return path2.length > 0 ? path2[path2.length - 1].namespace : void 0;
   }
   /**
    * Get current node's attribute value.
@@ -2289,9 +2948,9 @@ var MatcherView = class {
    * @returns {*}
    */
   getAttrValue(attrName) {
-    const path = this._matcher.path;
-    if (path.length === 0) return void 0;
-    return path[path.length - 1].values?.[attrName];
+    const path2 = this._matcher.path;
+    if (path2.length === 0) return void 0;
+    return path2[path2.length - 1].values?.[attrName];
   }
   /**
    * Check if current node has an attribute.
@@ -2299,9 +2958,9 @@ var MatcherView = class {
    * @returns {boolean}
    */
   hasAttr(attrName) {
-    const path = this._matcher.path;
-    if (path.length === 0) return false;
-    const current = path[path.length - 1];
+    const path2 = this._matcher.path;
+    if (path2.length === 0) return false;
+    const current = path2[path2.length - 1];
     return current.values !== void 0 && attrName in current.values;
   }
   /**
@@ -2327,18 +2986,18 @@ var MatcherView = class {
    * @returns {number}
    */
   getPosition() {
-    const path = this._matcher.path;
-    if (path.length === 0) return -1;
-    return path[path.length - 1].position ?? 0;
+    const path2 = this._matcher.path;
+    if (path2.length === 0) return -1;
+    return path2[path2.length - 1].position ?? 0;
   }
   /**
    * Get current node's repeat counter (occurrence count of this tag name).
    * @returns {number}
    */
   getCounter() {
-    const path = this._matcher.path;
-    if (path.length === 0) return -1;
-    return path[path.length - 1].counter ?? 0;
+    const path2 = this._matcher.path;
+    if (path2.length === 0) return -1;
+    return path2[path2.length - 1].counter ?? 0;
   }
   /**
    * Get current node's sibling index (alias for getPosition).
@@ -4297,7 +4956,7 @@ var MODES = /* @__PURE__ */ new Set([
   "mix"
 ]);
 var enc = new TextEncoder();
-var now2 = () => Math.floor(Date.now() / 1e3);
+var now3 = () => Math.floor(Date.now() / 1e3);
 var Failure = class extends Error {
   constructor(status, message) {
     super(message);
@@ -4318,7 +4977,7 @@ function classified(error, stage2) {
   if (error instanceof Failure && error.stage) return error;
   const failure = new Failure(
     Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599 ? error.status : 503,
-    error instanceof Failure ? error.message : `Publication/service failure: ${reason(error)}`
+    error instanceof Failure || error instanceof PackError ? error.message : `Publication/service failure: ${reason(error)}`
   );
   failure.stage = stage2;
   failure.code = error instanceof Failure ? "REQUEST_FAILED" : reason(error);
@@ -4333,14 +4992,14 @@ async function stage(name, action) {
     throw classified(error, name);
   }
 }
-function requireValue(ok, message, status = 400) {
-  if (!ok) throw new Failure(status, message);
+function requireValue(ok2, message, status = 400) {
+  if (!ok2) throw new Failure(status, message);
 }
 async function sha256(text2) {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(text2)))].map((v) => v.toString(16).padStart(2, "0")).join("");
 }
-function text(value, max = 2e3) {
-  requireValue(typeof value === "string" && value.length <= max && !/[\x00-\x1f\x7f]/.test(value), "Invalid metadata text");
+function text(value, max2 = 2e3) {
+  requireValue(typeof value === "string" && value.length <= max2 && !/[\x00-\x1f\x7f]/.test(value), "Invalid metadata text");
   return value.trim();
 }
 async function validateSubmission(value) {
@@ -4442,9 +5101,9 @@ async function body(request, limit = BODY_LIMIT) {
 function response(value, status = 200) {
   return Response.json(value, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
-async function rate(env, key, max, seconds) {
-  const bucket = Math.floor(now2() / seconds);
-  const r = await env.DB.prepare("INSERT INTO rate_limits(key,count,expires) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 WHERE count < ? RETURNING count").bind(`${key}:${bucket}`, (bucket + 1) * seconds, max).first();
+async function rate(env, key, max2, seconds) {
+  const bucket = Math.floor(now3() / seconds);
+  const r = await env.DB.prepare("INSERT INTO rate_limits(key,count,expires) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 WHERE count < ? RETURNING count").bind(`${key}:${bucket}`, (bucket + 1) * seconds, max2).first();
   requireValue(r, "Too many requests; try later", 429);
 }
 async function ipKey(request, env) {
@@ -4454,16 +5113,16 @@ async function ipKey(request, env) {
 async function authorized(request, env) {
   const token = (request.headers.get("authorization") || "").match(/^Bearer ([a-f0-9]{64})$/)?.[1];
   requireValue(token, "Validator login required", 401);
-  const session = await env.DB.prepare("SELECT s.hash FROM sessions s LEFT JOIN device_sessions ds ON ds.session_hash=s.hash LEFT JOIN devices d ON d.hash=ds.device_hash WHERE s.hash=? AND s.expires>? AND (ds.session_hash IS NULL OR ds.device_hash='' OR d.expires>unixepoch())").bind(await sha256(token), now2()).first();
+  const session = await env.DB.prepare("SELECT s.hash FROM sessions s LEFT JOIN device_sessions ds ON ds.session_hash=s.hash LEFT JOIN devices d ON d.hash=ds.device_hash WHERE s.hash=? AND s.expires>? AND (ds.session_hash IS NULL OR ds.device_hash='' OR d.expires>unixepoch())").bind(await sha256(token), now3()).first();
   requireValue(session, "Validator session expired", 401);
   return token;
 }
-async function github(env, path, method = "GET", data) {
+async function github(env, path2, method = "GET", data) {
   const token = String(env.GITHUB_TOKEN || "").trim();
   requireValue(token && /^[\x21-\x7e]+$/.test(token), "GITHUB_TOKEN is missing or contains invalid characters; check the Cloudflare secret", 503);
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15e3);
   try {
-    const r = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/${path2}`, {
       method,
       redirect: "manual",
       signal: controller.signal,
@@ -4580,22 +5239,22 @@ async function removePublished(env, kind, id, expected, api = github) {
   }
 }
 async function route(request, env) {
-  const url = new URL(request.url), path = url.pathname;
-  if (request.method === "GET" && (path === "/" || path === "/health")) return response({ service: "uwt-community", version: 2, revision: "published-removal-1", capabilities: ["published-removal"], configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
+  const url = new URL(request.url), path2 = url.pathname;
+  if (request.method === "GET" && (path2 === "/" || path2 === "/health")) return response({ service: "uwt-community", version: 2, revision: "reshade-packs-1", capabilities: ["published-removal", ...env.PACKS ? ["reshade-packs"] : []], pack_limit: ZIP_LIMIT, configured: !!(env.DB && env.GITHUB_TOKEN && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || "")), profile_limit: PROFILE_LIMIT });
   requireValue(env.DB && /^[a-f0-9]{64}$/.test(env.ADMIN_KEY_HASH || ""), "Service is not configured", 503);
-  if (request.method === "GET" && path === "/pair") return pairingPage();
+  if (request.method === "GET" && path2 === "/pair") return pairingPage();
   const paired = await pairingRoute(request, env, { body, rate, ipKey, sha256, requireValue, response, authorized, text });
   if (paired) return paired;
-  if (request.method === "POST" && path === "/v1/login") {
+  if (request.method === "POST" && path2 === "/v1/login") {
     await rate(env, "login:" + await ipKey(request, env), 10, 900);
     const value = await body(request, 1024);
     requireValue(typeof value.key === "string" && /^[a-f0-9]{64}$/.test(value.key), "Invalid validator key", 401);
     requireValue(await sha256(value.key) === env.ADMIN_KEY_HASH, "Invalid validator key", 401);
     const token2 = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
-    await env.DB.prepare("INSERT INTO sessions(hash,expires) VALUES(?,?)").bind(await sha256(token2), now2() + 1800).run();
-    return response({ token: token2, expires: now2() + 1800 });
+    await env.DB.prepare("INSERT INTO sessions(hash,expires) VALUES(?,?)").bind(await sha256(token2), now3() + 1800).run();
+    return response({ token: token2, expires: now3() + 1800 });
   }
-  if (request.method === "POST" && path === "/v1/submissions") {
+  if (request.method === "POST" && path2 === "/v1/submissions") {
     await rate(env, "submit:" + await ipKey(request, env), 5, 86400);
     await rate(env, "submit-global", 100, 86400);
     const value = await validateSubmission(await body(request));
@@ -4605,28 +5264,30 @@ async function route(request, env) {
       requireValue(existing.sha256 === m.sha256 && existing.metadata === JSON.stringify(m), "Identifier collision", 409);
       return response({ id: m.id, status: existing.status });
     }
-    const r = await env.DB.prepare("INSERT INTO submissions(id,kind,metadata,profile,sha256,created) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM submissions WHERE status IN ('pending','publishing'))<200").bind(m.id, m.kind, JSON.stringify(m), value.profile, m.sha256, now2()).run();
+    const r = await env.DB.prepare("INSERT INTO submissions(id,kind,metadata,profile,sha256,created) SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM submissions WHERE status IN ('pending','publishing'))<200").bind(m.id, m.kind, JSON.stringify(m), value.profile, m.sha256, now3()).run();
     requireValue(r.meta.changes === 1, "Review queue is full; try later", 503);
     return response({ id: m.id, status: "pending" }, 201);
   }
+  const packResponse = await packsRoute(request, env, { response, authorized, rate, ipKey, body });
+  if (packResponse) return packResponse;
   const token = await authorized(request, env);
-  if (path === "/v1/logout" && request.method === "POST") {
+  if (path2 === "/v1/logout" && request.method === "POST") {
     await env.DB.prepare("DELETE FROM sessions WHERE hash=?").bind(await sha256(token)).run();
     return response({ ok: true });
   }
-  if (path === "/v1/pending" && request.method === "GET") {
+  if (path2 === "/v1/pending" && request.method === "GET") {
     const kind = url.searchParams.get("kind");
     requireValue(["antimicrox", "reshade"].includes(kind), "Invalid profile type");
     const rows = await env.DB.prepare("SELECT metadata,status FROM submissions WHERE kind=? AND status IN ('pending','publishing') ORDER BY created LIMIT 200").bind(kind).all();
     return response({ entries: rows.results.map((r) => ({ ...JSON.parse(r.metadata), status: r.status })) });
   }
-  if (path === "/v1/published" && request.method === "GET") {
+  if (path2 === "/v1/published" && request.method === "GET") {
     const kind = url.searchParams.get("kind");
     requireValue(["antimicrox", "reshade"].includes(kind), "Invalid profile type");
     const { entries } = await publishedCatalog(env);
     return response({ entries: entries.filter((v) => v.kind === kind) });
   }
-  const published = path.match(/^\/v1\/published\/(antimicrox|reshade)\/([a-z0-9][a-z0-9-]{0,79})(\/remove)?$/);
+  const published = path2.match(/^\/v1\/published\/(antimicrox|reshade)\/([a-z0-9][a-z0-9-]{0,79})(\/remove)?$/);
   if (published) {
     const [, kind, id, action] = published;
     if (!action && request.method === "GET") {
@@ -4638,26 +5299,26 @@ async function route(request, env) {
     requireValue(action && request.method === "POST", "Unsupported method", 405);
     const value = await body(request, 1024);
     const row2 = await env.DB.prepare("SELECT status,lease_until FROM submissions WHERE id=? AND kind=?").bind(id, kind).first();
-    requireValue(!row2 || row2.status !== "publishing" || row2.lease_until < now2(), "Contribution is being published; retry later", 409);
+    requireValue(!row2 || row2.status !== "publishing" || row2.lease_until < now3(), "Contribution is being published; retry later", 409);
     const commit = await stage("removal", () => removePublished(env, kind, id, value.expected_hash));
     await stage("d1_removal_finalize", () => env.DB.prepare("UPDATE submissions SET status='rejected',profile='' WHERE id=? AND kind=? AND status='approved'").bind(id, kind).run());
     return response({ status: "removed", commit });
   }
-  const match = path.match(/^\/v1\/submissions\/([a-z0-9][a-z0-9-]{0,79})(?:\/(approve|reject))?$/);
+  const match = path2.match(/^\/v1\/submissions\/([a-z0-9][a-z0-9-]{0,79})(?:\/(approve|reject))?$/);
   requireValue(match, "Unknown endpoint", 404);
   const row = await env.DB.prepare("SELECT * FROM submissions WHERE id=?").bind(match[1]).first();
   requireValue(row, "Unknown contribution", 404);
   if (!match[2] && request.method === "GET") return response({ metadata: JSON.parse(row.metadata), profile: row.profile, status: row.status });
   requireValue(request.method === "POST" && match[2], "Unsupported method", 405);
   if (match[2] === "reject") {
-    const r = await env.DB.prepare("UPDATE submissions SET status='rejected',profile='' WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(row.id, now2()).run();
+    const r = await env.DB.prepare("UPDATE submissions SET status='rejected',profile='' WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(row.id, now3()).run();
     requireValue(r.meta.changes === 1, "Contribution already processed or being published", 409);
     return response({ status: "rejected" });
   }
   if (row.status === "approved") return response({ status: "approved", commit: row.commit_sha });
   requireValue(env.GITHUB_TOKEN, "GitHub secret is missing", 503);
   const lease = crypto.randomUUID();
-  const claimed = await stage("d1_publication_claim", () => env.DB.prepare("UPDATE submissions SET status='publishing',lease=?,lease_until=? WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(lease, now2() + 300, row.id, now2()).run());
+  const claimed = await stage("d1_publication_claim", () => env.DB.prepare("UPDATE submissions SET status='publishing',lease=?,lease_until=? WHERE id=? AND (status='pending' OR (status='publishing' AND lease_until<?))").bind(lease, now3() + 300, row.id, now3()).run());
   requireValue(claimed.meta.changes === 1, "Contribution already processed or being published; retry later", 409);
   try {
     await stage("publication_validate", () => validateSubmission({ metadata: JSON.parse(row.metadata), profile: row.profile }));
@@ -4675,14 +5336,15 @@ async function route(request, env) {
   }
 }
 async function cleanup(env) {
+  await cleanupPacks(env);
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM sessions WHERE expires<?").bind(now2()),
-    env.DB.prepare("DELETE FROM pairings WHERE expires<?").bind(now2()),
-    env.DB.prepare("DELETE FROM devices WHERE expires<?").bind(now2()),
+    env.DB.prepare("DELETE FROM sessions WHERE expires<?").bind(now3()),
+    env.DB.prepare("DELETE FROM pairings WHERE expires<?").bind(now3()),
+    env.DB.prepare("DELETE FROM devices WHERE expires<?").bind(now3()),
     env.DB.prepare("DELETE FROM device_sessions WHERE session_hash NOT IN (SELECT hash FROM sessions)").bind(),
-    env.DB.prepare("DELETE FROM rate_limits WHERE expires<?").bind(now2()),
-    env.DB.prepare("DELETE FROM submissions WHERE created<? AND status IN ('approved','rejected')").bind(now2() - 30 * 86400),
-    env.DB.prepare("DELETE FROM submissions WHERE created<? AND (status='pending' OR (status='publishing' AND lease_until<unixepoch()))").bind(now2() - 30 * 86400)
+    env.DB.prepare("DELETE FROM rate_limits WHERE expires<?").bind(now3()),
+    env.DB.prepare("DELETE FROM submissions WHERE created<? AND status IN ('approved','rejected')").bind(now3() - 30 * 86400),
+    env.DB.prepare("DELETE FROM submissions WHERE created<? AND (status='pending' OR (status='publishing' AND lease_until<unixepoch()))").bind(now3() - 30 * 86400)
   ]);
 }
 var worker_default = {

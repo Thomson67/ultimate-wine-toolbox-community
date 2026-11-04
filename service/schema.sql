@@ -39,3 +39,11 @@ CREATE TABLE IF NOT EXISTS device_sessions (
   device_hash TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS device_sessions_device ON device_sessions(device_hash);
+
+-- ReShade binary packs: private R2 objects, public only after approval.
+CREATE TABLE IF NOT EXISTS pack_submissions (
+ id TEXT PRIMARY KEY, metadata TEXT NOT NULL, sha256 TEXT NOT NULL,
+ object_key TEXT NOT NULL, created INTEGER NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected'))
+);
+CREATE INDEX IF NOT EXISTS pack_queue ON pack_submissions(status, created);
