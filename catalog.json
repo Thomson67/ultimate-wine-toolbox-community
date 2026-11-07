@@ -132,6 +132,20 @@
       "requirements": [],
       "file": "reshade/the-legend-of-zelda-ocarina-of-time-3d-f4ede4eb.ini",
       "sha256": "868d2bac464f73c500d3091777044e42558508b8fc08e6aed8ce32c3a8a4f8a5"
+    },
+    {
+      "id": "chaos-on-deponia-6549b3b0",
+      "kind": "antimicrox",
+      "game": "Chaos on Deponia",
+      "title": "Chaos on Deponia",
+      "author": "Thomson",
+      "description": "Prise en charge manette complète",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "antimicrox/chaos-on-deponia-6549b3b0.amgp",
+      "sha256": "fe61a22feea7cbdd28a3b86d3694fdaadc5bd018e04cc2460376e2c17871ccd9"
     }
   ]
 }
