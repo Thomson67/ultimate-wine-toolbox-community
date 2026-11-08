@@ -174,6 +174,20 @@
       "requirements": [],
       "file": "antimicrox/deponia-doomsday-1e7ec757.amgp",
       "sha256": "fe61a22feea7cbdd28a3b86d3694fdaadc5bd018e04cc2460376e2c17871ccd9"
+    },
+    {
+      "id": "deponia-aceb40bb",
+      "kind": "antimicrox",
+      "game": "Deponia[AmX]",
+      "title": "Deponia",
+      "author": "Thomson",
+      "description": "Prise en charge manette complète",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "antimicrox/deponia-aceb40bb.amgp",
+      "sha256": "fe61a22feea7cbdd28a3b86d3694fdaadc5bd018e04cc2460376e2c17871ccd9"
     }
   ]
 }
