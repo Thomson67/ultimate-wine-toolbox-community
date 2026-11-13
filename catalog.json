@@ -188,6 +188,20 @@
       "requirements": [],
       "file": "antimicrox/goodbye-deponia-b9cfe654.amgp",
       "sha256": "fe61a22feea7cbdd28a3b86d3694fdaadc5bd018e04cc2460376e2c17871ccd9"
+    },
+    {
+      "id": "pillars-of-eternity-44eb1cd7",
+      "kind": "reshade",
+      "game": "Pillars of Eternity",
+      "title": "Pillars of Eternity",
+      "author": "Thomsonito",
+      "description": "Sharper, lighter preset",
+      "notes": "",
+      "tested_on": "",
+      "hotkey": "",
+      "requirements": [],
+      "file": "reshade/pillars-of-eternity-44eb1cd7.ini",
+      "sha256": "b9e22704936ea2887ea9abb58dc9ab05b94d62b0ab5a8df4f8a03bb70b8a1bc1"
     }
   ]
 }
